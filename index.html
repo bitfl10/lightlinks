@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no">
+        <script src="https://supertestnet.github.io/bankify/super_nostr.js"></script>
+        <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
+        <script src="https://bundle.run/bech32@2.0.0"></script>
+        <script>
+            var dominus = e => e.target.parentElement.remove();
+            var doplus = () => {
+                if ( $( '.plus_button' ) ) {
+                    $( '.plus_button' ).classList.add( "minus_button" );
+                    $( '.plus_button' ).innerHTML = 'Remove item';
+                    $( '.plus_button' ).onclick = dominus;
+                    $( '.plus_button' ).classList.remove( "plus_button" );
+                }
+                var html = `
+                    <div class="product">
+                        <p>Product title</p>
+                        <input class="product_title">
+                        <p>Price (in sats)</p>
+                        <input class="price">
+                        <p>Affiliate discount (percentage)</p>
+                        <input class="discount">
+                        <p>Short description</p>
+                        <input class="short_desc">
+                        <p>Long description</p>
+                        <textarea class="long_desc"></textarea>
+                        <p>Categories (comma separated)</p>
+                        <input class="categories">
+                        <p>Image</p>
+                        <input class="product_image">
+                        <button class="plus_button">Add item</button>
+                    </div>
+                `;
+                var div = document.createElement( "div" );
+                div.innerHTML = html;
+                div.getElementsByClassName( "plus_button" )[ 0 ].onclick = doplus;
+                $( '.products' ).append( div.firstElementChild );
+            }
+            var hexToText = hex => {
+                var bytes = new Uint8Array( Math.ceil( hex.length / 2 ) );
+                var i; for ( i=0; i<hex.length; i++ ) bytes[ i ] = parseInt( hex.substr( i * 2, 2 ), 16 );
+                var text = new TextDecoder().decode( bytes );
+                return text;
+            }
+            var textToHex = text => {
+                var encoded = new TextEncoder().encode( text );
+                return Array.from( encoded )
+                    .map( x => x.toString( 16 ).padStart( 2, "0" ) )
+                    .join( "" );
+            }
+            var hexToBytes = hex => Uint8Array.from( hex.match( /.{1,2}/g ).map( byte => parseInt( byte, 16 ) ) );
+            var bytesToHex = bytes => bytes.reduce( ( str, byte ) => str + byte.toString( 16 ).padStart( 2, "0" ), "" );
+            var affiliatePlus = () => {
+                if ( $( '.affiliate_plus_button' ) ) {
+                    $( '.affiliate_plus_button' ).classList.add( "affiliate_minus_button" );
+                    $( '.affiliate_plus_button' ).innerHTML = '-';
+                    $( '.affiliate_plus_button' ).onclick = dominus;
+                    $( '.affiliate_plus_button' ).classList.remove( "affiliate_plus_button" );
+                }
+                var html = `
+                    <div class="affiliate">
+                        <p>Affiliate nprofile</p>
+                        <input class="affiliate_nprofile">
+                        <span class="affiliate_plus_button">+</span>
+                    </div>
+                `;
+                var div = document.createElement( "div" );
+                div.innerHTML = html;
+                div.getElementsByClassName( "affiliate_plus_button" )[ 0 ].onclick = affiliatePlus;
+                $( '.affiliates' ).append( div.firstElementChild );
+            }
+
+            var convertNEvent = nevent => {
+                var arr = bech32.bech32.fromWords( bech32.bech32.decode( nevent, 100_000 ).words );
+                var hex = bytesToHex( arr );
+                if ( !hex.startsWith( "0020" ) ) var event_id = hex.substring( hex.length - 64 );
+                else var event_id = hex.substring( 4, 68 );
+                if ( !hex.startsWith( "0020" ) ) hex = hex.substring( 0, hex.length - 64 );
+                else hex = hex.substring( 68 );
+                var relays = [];
+                var loop = () => {
+                    if ( hex.startsWith( "01" ) ) {
+                        var relay_length = parseInt( hex.substring( 2, 4 ), 16 );
+                        relays.push( hexToText( hex.substring( 4, 4 + relay_length * 2 ) ) );
+                        hex = hex.substring( 4 + relay_length * 2 );
+                        loop();
+                    }
+                }
+                loop();
+                return [ event_id, relays ];
+            }
+            var convertPubkeyAndRelaysToNprofile = ( prefix, pubkey, relays ) => {
+                var relays_str = "";
+                relays.forEach( relay => {
+                    var relay_str = textToHex( relay );
+                    var len = ( relay_str.length / 2 ).toString( 16 );
+                    if ( len.length % 2 ) len = "0" + len;
+                    relays_str = relays_str + "01" + len + relay_str;
+                });
+                var hex = relays_str + "0020" + pubkey;
+                var bytes = hexToBytes( hex );
+                var nevent = bech32.bech32.encode( prefix, bech32.bech32.toWords( bytes ), 100_000 );
+                return nevent;
+            }
+        </script>
+        <style>
+            * {
+                box-sizing: border-box;
+                font-size: 1.15rem;
+                font-family: Arial, sans-serif;
+            }
+            html {
+                max-width: 800px;
+                padding: 3rem 1rem;
+                margin: auto;
+                line-height: 1.25;
+                padding: 0;
+            }
+            body {
+                margin: 3rem 1rem;
+                word-wrap: break-word;
+            }
+            h1 {
+                font-size: 2rem;
+            }
+            h2 {
+                font-size: 1.5rem;
+            }
+            input, textarea {
+                line-height: 1.25;
+                width: 100%;
+                height: 1.8rem;
+                font-size: 1.15rem;
+                border: 1px solid grey;
+            }
+            textarea {
+                height: auto;
+            }
+            .hidden {
+                display: none !important;
+            }
+            .option {
+                margin-bottom: 1rem;
+                padding: 1rem;
+                border: 1px solid black;
+                border-radius: 1rem;
+                background-color: #cccccc;
+                color: white;
+                font-weight: bold;
+                cursor: pointer;
+            }
+            .affiliates {
+                background-color: white;
+                color: black;
+                padding: 1rem;
+                border: 1px solid black;
+                border-radius: 1rem;
+                margin-top: 1rem;
+                cursor: auto;
+            }
+            .product {
+                padding: 1rem;
+                border: 1px solid black;
+                border-radius: 1rem;
+                margin-top: 1rem;
+                background-color: white;
+                color: black;
+                cursor: auto;
+            }
+            .affiliate:first-child {
+                margin-top: -.5rem;
+            }
+            .submit_div button {
+                margin-top: 1rem;
+                width: 100%;
+            }
+            @media screen and (max-width: 600px) {
+            }
+        </style>
+        <style>
+            .plus_button, .minus_button {
+                margin-top: 1.5rem;
+                width: 100%;
+            }
+            .affiliate_nprofile {
+                width: calc( 100% - 2.5rem );
+            }
+            .affiliate_plus_button, .affiliate_minus_button {
+                display: inline-block;
+                border: 1px solid grey;
+                padding: 0px 5px;
+                cursor: pointer;
+                width: 2rem;
+                text-align: center;
+                vertical-align: top;
+                height: 1.8rem;
+                line-height: 1.8rem;
+            }
+
+        </style>
+        <script>
+            var $ = document.querySelector.bind( document );
+            var $$ = document.querySelectorAll.bind( document );
+            var url_params = new URLSearchParams( window.location.search );
+            var url_keys = url_params.keys();
+            var $_GET = {}
+            for ( var key of url_keys ) $_GET[ key ] = url_params.get( key );
+        </script>
+    </head>
+    <body>
+        <h1>Welcome to lightlinks admin</h1>
+        <p>Please create a product</p>
+        <div class="option">
+            <div class="label">Products</div>
+            <div class="sometimes_invisible products hidden"></div>
+            <div class="submit_div hidden"><button onclick="submitProducts();">Submit</button></div>
+        </div>
+        <div class="option">
+            <div class="label">Affiliates</div>
+            <div class="sometimes_invisible affiliates hidden"></div>
+            <div class="submit_div hidden"><button onclick="submitAffiliaites();">Submit</button></div>
+        </div>
+        <script>
+            var privkey = super_nostr.getPrivkey();
+            var relays = [ "wss://relay.damus.io" ];
+            $$( '.option' ).forEach( item => item.onclick = e => {
+                if ( e.target.parentElement.tagName !== "DIV" ) var target = e.target.getElementsByClassName( "sometimes_invisible" )[ 0 ];
+                else var target = e.target.parentElement.getElementsByClassName( "sometimes_invisible" )[ 0 ];
+                if ( !target ) return;
+                if ( target.classList.contains( "hidden" ) ) {
+                    target.classList.remove( "hidden" );
+                    target.parentElement.getElementsByClassName( "submit_div" )[ 0 ].classList.remove( "hidden" );
+                } else {
+                    target.classList.add( "hidden" );
+                    target.parentElement.getElementsByClassName( "submit_div" )[ 0 ].classList.add( "hidden" );
+                }
+            });
+            var submitProducts = async () => {
+                var products = [];
+                $$( '.product .product_title' ).forEach( item => {
+                    var title = item.value;
+                });
+                var msg = `A delicious chocolatey cookie that is only slightly racist`;
+                var tags = [
+                    [ "title", "Negresco (10 pack)" ],
+                    [ "published_at", Math.floor( Date.now() / 1000 ) ],
+                    [ "t", "cookie" ],
+                    [ "image", "https://www.monpetitbresil.com/cdn/shop/products/Bolachas_4.png?v=1662403902", "1080x1080" ],
+                    [ "summary", "A delicious chocolatey cookie that is only slightly racist" ],
+                    [ "location", "Floripa" ],
+                    [ "price", "0.00001000", "btc", "never", "active" ],
+                    [ "discount", "5", "percent" ],
+                ];
+                var event = await super_nostr.prepEvent( privkey, msg, 30402, tags );
+                // super_nostr.sendEvent( event, relays );
+                console.log( event );
+            }
+            var submitAffiliaites = async () => {
+                //list of nprofiles:
+                //nprofile1qqszrqlfgavys8g0zf8mmy79dn92ghn723wwawx49py0nqjn7jtmjagppamhxue69uhkummnw3ezumt0d5qs6amnwvaz7tmwdaejumr0dssraqwh
+                //nprofile1qqsv6sy2d8xxcumu5xnkalpl5frudjjnajq87mnuj46pvsty09lgzcspz3mhxue69uhhyetvv9ujuerpd46hxtnfduqs6amnwvaz7tmwdaejumr0dsqkvamnwvaz7tmxd9k8getj9ehx7um5wgh8w6twv5hkuur4vgck2dr3vu6nvamkvsek26r9vajrserdxaexcem28p3k6wfe8pkhjufsv95rsefews6h5et3ddnnwaphwvunxufhx5c8qdek8a38ymmpv33kzum58468yat9qyt8wumn8ghj7un9d3shjtnwdaehgu3wvfskueqpp4mhxue69uhhjctzw5hx6egpypmhxue69uhhyetvv9uj66ns9ehx7um5wgh8w6tjv4jxuet59e48q904jph
+                var nprofiles = [];
+                $$( '.affiliate_nprofile' ).forEach( item => [ "affiliate", nprofiles.push( item.value ) ] );
+                var event = {
+                    "kind": 13167,
+                    "created_at": Math.floor( Date.now() / 1000 ),
+                    "content": "",
+                    "tags": nprofiles,
+                }
+                var event = await super_nostr.prepEvent( privkey, "", 13167, nprofiles );
+                super_nostr.sendEvent( event, relays );
+            }
+            doplus();
+            affiliatePlus();
+        </script>
+    </body>
+</html>
