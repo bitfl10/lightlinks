@@ -5,6 +5,92 @@
         <meta name="viewport" content="width=device-width, user-scalable=no">
         <script src="https://supertestnet.github.io/bankify/super_nostr.js"></script>
         <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
+        <script src="https://bundle.run/bech32@2.0.0"></script>
+        <script>
+            var dominus = e => e.target.parentElement.remove();
+            var doplus = () => {
+                if ( $( '.plus_button' ) ) {
+                    $( '.plus_button' ).classList.add( "minus_button" );
+                    $( '.plus_button' ).innerHTML = '-';
+                    $( '.plus_button' ).onclick = dominus;
+                    $( '.plus_button' ).classList.remove( "plus_button" );
+                }
+                var html = `
+                    <div class="product">
+                        <div>
+                            <div class="checkbox_label">Check the box if this is a product</div>
+                            <input class="link_checkbox" type="checkbox">
+                        </div>
+                        <p>Give a link or a product identifier (nevent)</p>
+                        <input class="identifier">
+                        <span class="plus_button">+</span>
+                    </div>
+                `;
+                var div = document.createElement( "div" );
+                div.innerHTML = html;
+                div.getElementsByClassName( "plus_button" )[ 0 ].onclick = doplus;
+                // $( '.form' ).append( div.firstElementChild );
+            }
+            var hexToText = hex => {
+                var bytes = new Uint8Array( Math.ceil( hex.length / 2 ) );
+                var i; for ( i=0; i<hex.length; i++ ) bytes[ i ] = parseInt( hex.substr( i * 2, 2 ), 16 );
+                var text = new TextDecoder().decode( bytes );
+                return text;
+            }
+            var textToHex = text => {
+                var encoded = new TextEncoder().encode( text );
+                return Array.from( encoded )
+                    .map( x => x.toString( 16 ).padStart( 2, "0" ) )
+                    .join( "" );
+            }
+            var hexToBytes = hex => Uint8Array.from( hex.match( /.{1,2}/g ).map( byte => parseInt( byte, 16 ) ) );
+            var bytesToHex = bytes => bytes.reduce( ( str, byte ) => str + byte.toString( 16 ).padStart( 2, "0" ), "" );
+            var convertNEvent = nevent => {
+                var arr = bech32.bech32.fromWords( bech32.bech32.decode( nevent, 100_000 ).words );
+                var hex = bytesToHex( arr );
+                if ( !hex.startsWith( "0020" ) ) var event_id = hex.substring( hex.length - 64 );
+                else var event_id = hex.substring( 4, 68 );
+                if ( !hex.startsWith( "0020" ) ) hex = hex.substring( 0, hex.length - 64 );
+                else hex = hex.substring( 68 );
+                var relays = [];
+                var loop = () => {
+                    if ( hex.startsWith( "01" ) ) {
+                        var relay_length = parseInt( hex.substring( 2, 4 ), 16 );
+                        relays.push( hexToText( hex.substring( 4, 4 + relay_length * 2 ) ) );
+                        hex = hex.substring( 4 + relay_length * 2 );
+                        loop();
+                    }
+                }
+                loop();
+                return [ event_id, relays ];
+            }
+            var convertPubkeyAndRelaysToNprofile = ( prefix, pubkey, relays ) => {
+                var relays_str = "";
+                relays.forEach( relay => {
+                    var relay_str = textToHex( relay );
+                    var len = ( relay_str.length / 2 ).toString( 16 );
+                    if ( len.length % 2 ) len = "0" + len;
+                    relays_str = relays_str + "01" + len + relay_str;
+                });
+                var hex = relays_str + "0020" + pubkey;
+                var bytes = hexToBytes( hex );
+                var nevent = bech32.bech32.encode( prefix, bech32.bech32.toWords( bytes ), 100_000 );
+                return nevent;
+            }
+            var extractTagFromNostrEvent = ( event, tag ) => {
+                var data = null;
+                event.tags.every( item => {
+                    if ( item[ 0 ] === tag ) {
+                        data = item[ 1 ];
+                        return;
+                    }
+                    return true;
+                });
+                if ( data ) return data;
+                return "no data";
+            }
+            var pubkeyToNpub = hex => bech32.bech32.encode( "npub", bech32.bech32.toWords( hexToBytes( hex ) ) );
+        </script>
         <style>
             * {
                 box-sizing: border-box;
@@ -47,49 +133,151 @@
                 color: white;
                 cursor: pointer;
             }
+            .checkbox_label, .link_checkbox {
+                display: inline-block;
+                vertical-align: middle;
+            }
+            input[class='link_checkbox'] {
+                display: inline-block;
+                width: .85rem;
+            }
+            .product, .affiliated_product {
+                margin-top: 1rem;
+                padding: 1rem;
+                border: 1px solid black;
+                border-radius: 1rem;
+            }
+            .submit_div button {
+                margin-top: 1rem;
+                width: 100%;
+            }
             @media screen and (max-width: 600px) {
             }
         </style>
-    <script>
-        var $ = document.querySelector.bind( document );
-        var $$ = document.querySelectorAll.bind( document );
-        var url_params = new URLSearchParams( window.location.search );
-        var url_keys = url_params.keys();
-        var $_GET = {}
-        for ( var key of url_keys ) $_GET[ key ] = url_params.get( key );
-        var hash_arr = window.location.href.substring( window.location.href.indexOf( "#" ) ).split( "#" );
-        hash_arr.splice( 0, 1 );
-        var params = {}
-        hash_arr.forEach( item => {
-            var vals = item.split( "=" );
-            params[ vals[ 0 ] ] = vals[ 1 ];
-        });
-    </script>
+        <style>
+            .identifier {
+                width: calc( 100% - 2.5rem );
+            }
+            .plus_button, .minus_button {
+                display: inline-block;
+                border: 1px solid grey;
+                padding: 0px 5px;
+                cursor: pointer;
+                width: 2rem;
+                text-align: center;
+                vertical-align: top;
+                height: 1.8rem;
+                line-height: 1.8rem;
+            }
+        </style>
+        <script>
+            var $ = document.querySelector.bind( document );
+            var $$ = document.querySelectorAll.bind( document );
+            var url_params = new URLSearchParams( window.location.search );
+            var url_keys = url_params.keys();
+            var $_GET = {}
+            for ( var key of url_keys ) $_GET[ key ] = url_params.get( key );
+            var hash_arr = window.location.href.substring( window.location.href.indexOf( "#" ) ).split( "#" );
+            hash_arr.splice( 0, 1 );
+            var params = {}
+            hash_arr.forEach( item => {
+                var vals = item.split( "=" );
+                params[ vals[ 0 ] ] = vals[ 1 ];
+            });
+            if ( params.privkey ) {
+                var privkey = super_nostr.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( params.privkey ).words ) );
+                window.location.href = window.location.href.substring( 0, window.location.href.indexOf( "#" ) );
+                params.privkey = privkey;
+                var pubkey = super_nostr.getPubkey( privkey );
+                sessionStorage.privkey = privkey;
+                sessionStorage.pubkey = pubkey;
+            }
+        </script>
     </head>
     <body>
         <div class="links"></div>
+        <div class="merchants_and_products">
+            <h2>Who you can affiliate with</h2>
+        </div>
+        <div class="form"></div>
+        <div class="user_affiliations">
+            <h2>Your affiliations</h2>
+        </div>
+        <div class="submit_div">
+            <button class="submit_products" onclick="submitProducts();">Submit</button>
+        </div>
         <script>
-            var events = null;
-            (async()=>{
-                events = await super_nostr.getEvents('wss://relay.damus.io', null, [$_GET.affiliate], [13166]);
-                events[ 0 ].tags.forEach( tag => {
-                    if ( tag[ 0 ] === "link" ) {
-                        var div = document.createElement( "div" );
-                        div.innerHTML = `
-                            <div class="link">
-                                <span class="link_desc"></span>
-                            </div>
-                        `;
-                        var link = div.firstElementChild;
-                        link.getElementsByClassName( "link_desc" )[ 0 ].innerText = tag[ 2 ];
-                        link.onclick = () => window.open( tag[ 1 ], "_blank" );
-                        $( '.links' ).append( link );
-                    }
-                    if ( tag[ 0 ] === "classified" ) {
-                        console.log( tag );
-                    }
+            //nsec14psexusn98c97d7ujl06stql0exe6e7nj3cww0afxxlc9vsn4sdsss5kcd
+            var relays = [ 'wss://relay.damus.io' ];
+            var list_of_merchants = [
+                "1ac95c4a4353452ecf1c115d4ea2dfc09b5f404ec415b02bdd51e5180ae388e5",
+                "73919df38b372fd19d323f089fd1cc148b8b74eb764947a81f5c0fb2384c116d",
+            ];
+            var submitProducts = async () => {
+                var products_and_links = [];
+                $$( '.affiliated_product' ).forEach( item => products_and_links.push( item.getAttribute( "data-nevent" ) ) );
+                console.log( products_and_links );
+                var tags = [];
+                products_and_links.forEach( nevent => {
+                    tags.push( [ "classified", nevent ] );
                 });
+                var event = await super_nostr.prepEvent( sessionStorage.privkey, "", 13166, tags );
+                super_nostr.sendEvent( event, relays[ 0 ] );
+            }
+            var addToAffiliations = ( product, event_name, merchant ) => {
+                var nevent = product.getAttribute( "data-nevent" );
+                var div = document.createElement( "div" );
+                div.innerHTML = `
+                    <div class="affiliated_product" data-nevent="${nevent}">Product: ${event_name}<br><br>Merchant: ${merchant}<div style="margin-top: 1rem;"></div>
+                `;
+                $( '.user_affiliations' ).append( div.firstElementChild );
+            }
+            doplus();
+            (async()=>{
+                var info = {}
+                var events = await super_nostr.getEvents( relays[ 0 ], null, list_of_merchants, [30402] );
+                var j; for ( j=0; j<events.length; j++ ) {
+                    var event = events[ j ];
+                    var merchant_pubkey = event.pubkey;
+                    var npub = pubkeyToNpub( merchant_pubkey );
+                    var prejson = await fetch( `https://lightlinksio-aehw.Replit.app/api/users/pubkey/${npub}` );
+                    var json = await prejson.json();
+                    var merchant = json.username;
+                    var nevent = convertPubkeyAndRelaysToNprofile( "nevent", events[ 0 ].id, relays );
+                    var event_name = extractTagFromNostrEvent( event, "title" );
+                    var html = `
+                        <div class="product" data-nevent="${nevent}">Product: ${event_name}<br><br>Merchant: ${merchant}<div style="margin-top: 1rem;"><button onclick="addToAffiliations( this.parentElement.parentElement, '${event_name}', '${merchant}' );">Affiliate market this product</div></div>
+                    `;
+                    var div = document.createElement( "div" );
+                    div.innerHTML = html;
+                    $( '.merchants_and_products' ).append( div );
+                }
+                // events = await super_nostr.getEvents('wss://relay.damus.io', null, [$_GET.affiliate], [13166]);
+                // events[ 0 ].tags.forEach( tag => {
+                //     if ( tag[ 0 ] === "link" ) {
+                //         var div = document.createElement( "div" );
+                //         div.innerHTML = `
+                //             <div class="link">
+                //                 <span class="link_desc"></span>
+                //             </div>
+                //         `;
+                //         var link = div.firstElementChild;
+                //         link.getElementsByClassName( "link_desc" )[ 0 ].innerText = tag[ 2 ];
+                //         link.onclick = () => window.open( tag[ 1 ], "_blank" );
+                //         $( '.links' ).append( link );
+                //     }
+                //     if ( tag[ 0 ] === "classified" ) {
+                //         console.log( tag );
+                //     }
+                // });
             })();
+            // var what = await fetch( "https://lightlinksio-aehw.Replit.app/api/users/username/Guida" );
+            // var json = await what.json();
+            // console.log( json.npub );
+            // var what = await fetch( "https://lightlinksio-aehw.Replit.app/api/users/pubkey/npub1wwgemuutxuhar8fj8uyfl5wvzj9cka8twey502qlts8mywzvz9ksqepsdd" );
+            // var json = await what.json();
+            // console.log( json.username );
+            // nifty's pubkey: npub1wwgemuutxuhar8fj8uyfl5wvzj9cka8twey502qlts8mywzvz9ksqepsdd
         </script>
     </body>
 </html>
