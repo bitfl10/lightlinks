@@ -493,7 +493,6 @@
                 //TODO: remove this pubkey
                 // var pubkey = `2183e94758481d0f124fbd93c56ccaa45e7e545ceeb8d52848f98253f497b975`;
                 var events = await super_nostr.getEvents( relays[ 0 ], null, [ pubkey ], [ 0 ], null, null, 1 );
-                console.log( events );
                 if ( !events.length ) {
                     $( '.lud16_entry_form' ).classList.remove( "hidden" );
                     $( '.options' ).classList.add( "hidden" );
