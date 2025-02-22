@@ -4,6 +4,7 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, user-scalable=no">
         <script src="https://supertestnet.github.io/bankify/super_nostr.js"></script>
+        <script src="https://supertestnet.github.io/nwcjs/nwcjs.js"></script>
         <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
         <script src="https://bundle.run/bech32@2.0.0"></script>
         <script>
@@ -137,6 +138,9 @@
                 color: white;
                 cursor: pointer;
             }
+            .bigger {
+                height: 15rem;
+            }
             .checkbox_label, .link_checkbox {
                 display: inline-block;
                 vertical-align: middle;
@@ -154,6 +158,25 @@
             .submit_div button {
                 margin-top: 1rem;
                 width: 100%;
+            }
+            .rest {
+                display: flex;
+                align-content: flex-start;
+            }
+            .rest img {
+                display: inline-block;
+                max-height: 10rem;
+            }
+            .buy_now_p, .was_price_p, .now_price_p {
+                display: inline-block;
+                padding: .5rem;
+            }
+            .buy_now {
+                background-color: green;
+                color: white;
+                font-weight: bold;
+                border-radius: .5rem;
+                padding: .5rem;
             }
             @media screen and (max-width: 600px) {
             }
@@ -251,6 +274,7 @@
         <div class="loading">
             loading...
         </div>
+        <p class="welcome hidden">Welcome to <span class="affiliates_name"></span>'s page</p>
         <div class="links"></div>
         <div class="edit_page hidden">
             <div class="merchants_and_products">
@@ -332,15 +356,13 @@
                     }
                 })();
             } else {
-                var username = window.location.href.substring( window.location.href.indexOf( "io/" ) + 3 );
-                console.log( username );
-                var pubkey = "9ac9721c7b02e520f554535779b5e6ddb247f00d88f5d89cfb994c2250439862";
                 var events = null;
                 (async()=>{
                     var data_to_display = [];
                     events = await super_nostr.getEvents('wss://relay.damus.io', null, [ pubkey ], [13166]);
                     var j; for ( j=0; j<events.length; j++ ) {
                         var event = events[ j ];
+                        var affiliate = event.pubkey;
                         var nevents = [];
                         event.tags.forEach( tag => {
                             nevents.push( tag[ 1 ] );
@@ -356,11 +378,50 @@
                             div.innerHTML = `
                                 <div class="classified">
                                     <span class="link_desc"></span>
+                                    <div class="rest hidden">
+                                        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR2A7zhnbXyIq6fbU8VPNHiUR2YZ4xmKJQA4Q&s">
+                                    <span class="short_desc"></span>
+                                    <p class="was_price_p">Price was: <span class="was_price"></span></p>
+                                    <p class="now_price_p">Price now: <span class="now_price"></span></p>
+                                    <p class="buy_now_p"><button class="buy_now" data-event="${textToHex( JSON.stringify( event_to_display ) )}" data-affiliate="${affiliate} data-merchant="${event_to_display.pubkey}">Buy now</button></p>
+                                    </div>
                                 </div>
                             `;
                             var link = div.firstElementChild;
                             var event_name = extractTagFromNostrEvent( event_to_display, "title" );
-                            link.getElementsByClassName( "link_desc" )[ 0 ].innerText = event_name;
+                            var discount = Number( extractTagFromNostrEvent( event_to_display, "discount" ) );
+                            var price = Number( extractTagFromNostrEvent( event_to_display, "price" ) );
+                            link.getElementsByClassName( "link_desc" )[ 0 ].innerText = `${event_name} -- discount of ${discount}%!`;
+                            link.getElementsByClassName( "was_price" )[ 0 ].innerText = `${price} sats`;
+                            link.getElementsByClassName( "now_price" )[ 0 ].innerText = `${Math.floor( price - ( price * ( discount / 100 ) ) )} sats`;
+                            link.onclick = e => {
+                                if ( e.target.classList.contains( "buy_now" ) ) {
+                                    buyNow( e.target.getAttribute( "data-event" ), e.target.getAttribute( "data-affiliate" ), e.target.getAttribute( "data-merchant" ) );
+                                    return;
+                                }
+                                var findParent = ( node, num_of_ups = 0 ) => {
+                                    if ( !node.parentElement ) return;
+                                    if ( node.parentElement.classList.contains( "classified" ) ) return num_of_ups;
+                                    num_of_ups = num_of_ups + 1;
+                                    return findParent( node.parentElement, num_of_ups );
+                                }
+                                var num_of_ups = findParent( e.target );
+                                var target = e.target;
+                                var i; for ( i=0; i<num_of_ups + 1; i++ ) {
+                                    target = target[ "parentElement" ];
+                                }
+                                if ( !target.classList.contains( "bigger" ) ) {
+                                    target.classList.add( "bigger" );
+                                    target.getElementsByClassName( "rest" )[ 0 ].classList.remove( "hidden" );
+                                } else {
+                                    target.classList.remove( "bigger" );
+                                    target.getElementsByClassName( "rest" )[ 0 ].classList.add( "hidden" );
+                                }
+                            }
+                            var what = await fetch( `https://lightlinksio-aehw.Replit.app/api/users/pubkey/${npub}` );
+                            var json = await what.json();
+                            $( '.affiliates_name' ).innerText = json.username;
+                            $( '.welcome' ).classList.remove( "hidden" );
                             $( '.links' ).append( link );
                             $( '.loading' ).classList.add( "hidden" );
                         }
@@ -390,6 +451,20 @@
                     var merchant = json.username;
                     addToAffiliations( nevent, event_name, merchant );
                 }
+            }
+            var buyNow = async ( event, affiliate, merchant ) => {
+                event = JSON.parse( hexToText( event ) );
+                var discount = Number( extractTagFromNostrEvent( event, "discount" ) );
+                var price = Number( extractTagFromNostrEvent( event, "price" ) );
+                var new_price = Math.floor( price - ( price * ( discount / 100 ) ) );
+                var events = await super_nostr.getEvents( relays[ 0 ], null, [ merchant ], [ 0 ], null, null, 1 );
+                console.log( events );
+                var lnaddy = JSON.parse( events[ 0 ].content ).lud16;
+                console.log( lnaddy );
+                var [ invoice, checking_id ] = await nwcjs.getZapRequest( lnaddy, new_price, relays );
+                console.log( invoice, checking_id );
+                var receipt = await getZapReceipt( checking_id );
+                console.log( receipt );
             }
             // var what = await fetch( "https://lightlinksio-aehw.Replit.app/api/users/username/Guida" );
             // var json = await what.json();
