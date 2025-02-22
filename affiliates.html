@@ -128,7 +128,7 @@
             .hidden {
                 display: none !important;
             }
-            .link {
+            .link, .classified {
                 margin-bottom: 1rem;
                 padding: 1rem;
                 border: 1px solid black;
@@ -337,24 +337,21 @@
                 var pubkey = "9ac9721c7b02e520f554535779b5e6ddb247f00d88f5d89cfb994c2250439862";
                 var events = null;
                 (async()=>{
+                    var data_to_display = [];
                     events = await super_nostr.getEvents('wss://relay.damus.io', null, [ pubkey ], [13166]);
-                    $( '.loading' ).classList.add( 'hidden' );
-                    if ( !events.length ) return;
-                    var i; for ( i=0; i<events[ 0 ].tags.length; i++ ) {
-                        var tag = events[ 0 ].tags[ i ];
-                        if ( tag[ 0 ] === "link" ) {
-                            var div = document.createElement( "div" );
-                            div.innerHTML = `
-                                <div class="link">
-                                    <span class="link_desc"></span>
-                                </div>
-                            `;
-                            var link = div.firstElementChild;
-                            link.getElementsByClassName( "link_desc" )[ 0 ].innerText = tag[ 2 ];
-                            link.onclick = () => window.open( tag[ 1 ], "_blank" );
-                            $( '.links' ).append( link );
-                        }
-                        if ( tag[ 0 ] === "classified" ) {
+                    var j; for ( j=0; j<events.length; j++ ) {
+                        var event = events[ j ];
+                        var nevents = [];
+                        event.tags.forEach( tag => {
+                            nevents.push( tag[ 1 ] );
+                        });
+                        var eids = [];
+                        nevents.forEach( nevent => {
+                            eids.push( convertNEvent( nevent )[ 0 ] );
+                        });
+                        var displayable_events = await super_nostr.getEvents( relays[ 0 ], eids );
+                        var q; for ( q=0; q<displayable_events.length; q++ ) {
+                            var event_to_display = displayable_events[ q ];
                             var div = document.createElement( "div" );
                             div.innerHTML = `
                                 <div class="classified">
@@ -362,12 +359,10 @@
                                 </div>
                             `;
                             var link = div.firstElementChild;
-                            var nevent = tag[ 1 ];
-                            var [ eid, relays ] = convertNEvent( nevent );
-                            var events_to_display = await super_nostr.getEvents( relays[ 0 ], eid );
-                            console.log( events_to_display );
-                            link.getElementsByClassName( "link_desc" )[ 0 ].innerText = '';
+                            var event_name = extractTagFromNostrEvent( event_to_display, "title" );
+                            link.getElementsByClassName( "link_desc" )[ 0 ].innerText = event_name;
                             $( '.links' ).append( link );
+                            $( '.loading' ).classList.add( "hidden" );
                         }
                     }
                 })();
