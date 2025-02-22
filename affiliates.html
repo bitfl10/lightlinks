@@ -369,17 +369,29 @@
                 })();
             }
             var parse13166 = async event => {
-                console.log( event );
                 var merchant_pubkey = event.pubkey;
-                var npub = pubkeyToNpub( merchant_pubkey );
-                var prejson = await fetch( `https://lightlinksio-aehw.Replit.app/api/users/pubkey/${npub}` );
-                $( '.loading' ).classList.add( 'hidden' );
-                var json = await prejson.json();
-                var nevent = convertPubkeyAndRelaysToNprofile( "nevent", event.id, relays );
-                var event_name = extractTagFromNostrEvent( event, "title" );
-                var merchant = json.username;
-                addToAffiliations( nevent, event_name, merchant );
-            } 
+                var nevents = [];
+                event.tags.forEach( tag => {
+                    nevents.push( tag[ 1 ] );
+                });
+                var eids = [];
+                nevents.forEach( nevent => {
+                    eids.push( convertNEvent( nevent )[ 0 ] );
+                });
+                var events = await super_nostr.getEvents( relays[ 0 ], eids );
+                var i; for ( i=0; i<events.length; i++ ) {
+                    var event = events[ i ];
+                    var merchant_pubkey = event.pubkey;
+                    var npub = pubkeyToNpub( merchant_pubkey );
+                    var prejson = await fetch( `https://lightlinksio-aehw.Replit.app/api/users/pubkey/${npub}` );
+                    $( '.loading' ).classList.add( 'hidden' );
+                    var json = await prejson.json();
+                    var nevent = convertPubkeyAndRelaysToNprofile( "nevent", event.id, relays );
+                    var event_name = extractTagFromNostrEvent( event, "title" );
+                    var merchant = json.username;
+                    addToAffiliations( nevent, event_name, merchant );
+                }
+            }
             // var what = await fetch( "https://lightlinksio-aehw.Replit.app/api/users/username/Guida" );
             // var json = await what.json();
             // console.log( json.npub );
