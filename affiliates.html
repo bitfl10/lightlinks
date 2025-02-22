@@ -270,7 +270,11 @@
             sessionStorage.removeItem( "pubkey" );
             var privkey = sessionStorage.privkey;
             if ( !sessionStorage.privkey ) privkey = params.privkey;
-            var pubkey = super_nostr.getPubkey( privkey );
+            if ( privkey ) var pubkey = super_nostr.getPubkey( privkey );
+            else {
+                var npub = window.location.href.substring( window.location.href.indexOf( "#pubkey" ) + 8 );
+                var pubkey = pubkeyFromNpub( npub );
+            }
             if ( privkey ) {
                 var list_of_merchants = [
                     "73919df38b372fd19d323f089fd1cc148b8b74eb764947a81f5c0fb2384c116d",
