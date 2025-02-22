@@ -302,6 +302,7 @@
                 (async()=>{
                     var info = {}
                     var events = await super_nostr.getEvents( relays[ 0 ], null, [ ...list_of_merchants, pubkey ], [30402, 13166] );
+                    console.log( events );
                     $( '.edit_page' ).classList.remove( 'hidden' );
                     var j; for ( j=0; j<events.length; j++ ) {
                         var event = events[ j ];
@@ -309,6 +310,7 @@
                             parse13166( event );
                             continue;
                         }
+                        if ( event.kind === 13166 ) continue;
                         var merchant_pubkey = event.pubkey;
                         var npub = pubkeyToNpub( merchant_pubkey );
                         var prejson = await fetch( `https://lightlinksio-aehw.Replit.app/api/users/pubkey/${npub}` );
