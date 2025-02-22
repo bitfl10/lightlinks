@@ -3,8 +3,13 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, user-scalable=no">
+        <script src="https://supertestnet.github.io/bitcoin-chess/js/qrcode.js"></script>
+        <script src="https://supertestnet.github.io/bitcoin-chess/js/bolt11.js"></script>
+        <script src="https://supertestnet.github.io/blind-sig-js/blindSigJS.js"></script>
         <script src="https://supertestnet.github.io/bankify/super_nostr.js"></script>
+        <script src="https://supertestnet.github.io/bankify/bankify.js"></script>
         <script src="https://supertestnet.github.io/nwcjs/nwcjs.js"></script>
+        <script src="https://bundle.run/browserify-cipher@1.0.1"></script>
         <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
         <script src="https://bundle.run/bech32@2.0.0"></script>
         <script>
@@ -233,6 +238,80 @@
                 display: none !important;
             }
         </style>
+        <style>
+            .copy_box {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                height: 2.2rem;
+            }
+            .copy_addy {
+                width: 100%;
+                max-width: 78%;
+                word-wrap: break-word;
+                background-color: #cccccc;
+                border: 1px solid black;
+                padding: .3rem;
+                height: 100%;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                display: block;
+                user-select: none;
+            }
+            .copy_btn {
+                width: 100%;
+                max-width: 18%;
+                text-align: center;
+                background-color: #cccccc;
+                border: 1px solid black;
+                padding: .3rem;
+                height: 100%;
+                padding-top: 3%;
+                cursor: pointer;
+            }
+            .toast {
+                box-sizing: border-box;
+                visibility: hidden;
+                width: 250px;
+                margin-left: -125px;
+                background-color: rgb(97, 235, 52);
+                color: white;
+                text-align: center;
+                border-radius: 2px;
+                padding: 16px;
+                position: fixed;
+                z-index: 1;
+                left: 50%;
+                bottom: 30px;
+            }
+
+            .toast.show {
+                visibility: visible;
+                -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+                animation: fadein 0.5s, fadeout 0.5s 2.5s;
+            }
+
+            @-webkit-keyframes fadein {
+                from {bottom: 0; opacity: 0;}
+                to {bottom: 30px; opacity: 1;}
+            }
+
+            @keyframes fadein {
+                from {bottom: 0; opacity: 0;}
+                to {bottom: 30px; opacity: 1;}
+            }
+
+            @-webkit-keyframes fadeout {
+                from {bottom: 30px; opacity: 1;}
+                to {bottom: 0; opacity: 0;}
+            }
+
+            @keyframes fadeout {
+                from {bottom: 30px; opacity: 1;}
+                to {bottom: 0; opacity: 0;}
+            }
+        </style>
         <script>
             var modalVanish = () => {
                 $( ".black-bg" ).classList.add( "hidden" );
@@ -243,6 +322,11 @@
                 $( ".modal" ).innerHTML += `<div style="overflow-y: auto; max-height: 80vh; margin-top: 1.5rem;">${content}</div>`;
                 $( ".black-bg" ).classList.remove( "hidden" );
                 $( ".modal" ).classList.remove( "hidden" );
+            }
+            var showToast = content => {
+                $( '.toast' ).innerHTML = content;
+                $( '.toast' ).classList.add( "show" );
+                setTimeout( () => $( '.toast' ).classList.remove( "show" ), 3000 );
             }
         </script>
         <script>
@@ -383,13 +467,13 @@
                                     <span class="short_desc"></span>
                                     <p class="was_price_p">Price was: <span class="was_price"></span></p>
                                     <p class="now_price_p">Price now: <span class="now_price"></span></p>
-                                    <p class="buy_now_p"><button class="buy_now" data-event="${textToHex( JSON.stringify( event_to_display ) )}" data-affiliate="${affiliate} data-merchant="${event_to_display.pubkey}">Buy now</button></p>
+                                    <p class="buy_now_p"><button class="buy_now" data-event="${textToHex( JSON.stringify( event_to_display ) )}" data-affiliate="${affiliate}" data-merchant="${event_to_display.pubkey}">Buy now</button></p>
                                     </div>
                                 </div>
                             `;
                             var link = div.firstElementChild;
                             var event_name = extractTagFromNostrEvent( event_to_display, "title" );
-                            var discount = Number( extractTagFromNostrEvent( event_to_display, "discount" ) );
+                            var discount = Number( extractTagFromNostrEvent( event_to_display, "discount" ) ) / 2;
                             var price = Number( extractTagFromNostrEvent( event_to_display, "price" ) );
                             link.getElementsByClassName( "link_desc" )[ 0 ].innerText = `${event_name} -- discount of ${discount}%!`;
                             link.getElementsByClassName( "was_price" )[ 0 ].innerText = `${price} sats`;
@@ -453,18 +537,116 @@
                 }
             }
             var buyNow = async ( event, affiliate, merchant ) => {
+                showModal( 'loading...' );
                 event = JSON.parse( hexToText( event ) );
-                var discount = Number( extractTagFromNostrEvent( event, "discount" ) );
+                var discount = Number( extractTagFromNostrEvent( event, "discount" ) ) / 2;
                 var price = Number( extractTagFromNostrEvent( event, "price" ) );
                 var new_price = Math.floor( price - ( price * ( discount / 100 ) ) );
-                var events = await super_nostr.getEvents( relays[ 0 ], null, [ merchant ], [ 0 ], null, null, 1 );
-                console.log( events );
-                var lnaddy = JSON.parse( events[ 0 ].content ).lud16;
-                console.log( lnaddy );
-                var [ invoice, checking_id ] = await nwcjs.getZapRequest( lnaddy, new_price, relays );
-                console.log( invoice, checking_id );
-                var receipt = await getZapReceipt( checking_id );
-                console.log( receipt );
+                var sats_for_merchant = new_price - Math.floor( price / discount / 2 );
+                var sats_for_affiliate = new_price - sats_for_merchant;
+                var events = await super_nostr.getEvents( relays[ 0 ], null, [ merchant, affiliate ], [ 0 ], null, null, 2 );
+                modalVanish();
+                var merchant_kind_0 = events[ 0 ];
+                if ( events.length === 1 ) var affiliate_kind_0 = JSON.parse( JSON.stringify( events[ 0 ] ) );
+                else var affiliate_kind_0 = events[ 1 ];
+                if ( merchant_kind_0.pubkey !== merchant ) {
+                    var merchant_kind_0 = events[ 1 ];
+                    var affiliate_kind_0 = events[ 0 ];
+                }
+                var merchant_lnaddy = JSON.parse( merchant_kind_0.content ).lud16;
+                var affiliate_lnaddy = JSON.parse( affiliate_kind_0.content ).lud16;
+                var total = Math.ceil( new_price * 1.02 );
+                console.log( 'total cost to you:', total );
+                console.log( `amount to send to merchant, ${merchant_lnaddy}:`, sats_for_merchant );
+                console.log( `amount to send to affiliate, ${affiliate_lnaddy}:`, sats_for_affiliate );
+                showModal( 'preparing to make payment...' );
+                var mymint = `https://mint.lnvoltz.com`;
+                await bankify.createNWCconnection( mymint );
+                var app_pubkey = Object.keys( bankify.state.nostr_state.nwc_info )[ 0 ];
+                var nwc_string = bankify.state.nostr_state.nwc_info[ app_pubkey ].nwc_string;
+                nwcjs.processNWCstring( nwc_string );
+                var nwc_obj = nwcjs.nwc_infos[ 0 ];
+                var invoice_data = await bankify.getLNInvoice( mymint, total );
+                var ln_bolt11 = invoice_data[ "request" ];
+                var url = "lightning:" + ln_bolt11;
+                var a = document.createElement( "a" );
+                a.href = url;
+                a.target = "_blank";
+                a.append( createQR( ln_bolt11.toUpperCase() ) );
+                var prep_div = document.createElement( "div" );
+                prep_div.append( a );
+                var div_html = prep_div.innerHTML;
+                showModal( `<div style="max-width: 15rem; margin: auto;">${div_html}<div class="copy_box"><input class="copy_addy" value="${ln_bolt11}" disabled=""> <span>&nbsp;</span><div class="copy_btn">⎘</div></div></div>` );
+                $( '.copy_btn' ).onclick = () => {
+                    var copytext = $( '.copy_addy' );
+                    copytext.select();
+                    copytext.setSelectionRange( 0, 99999 );
+                    navigator.clipboard.writeText( copytext.value );
+                    showToast( 'copied' );
+                }
+                var state = bankify.state.nostr_state.nwc_info[ app_pubkey ];
+                state.tx_history[ bankify.getInvoicePmthash( invoice_data[ "request" ] ) ] = {
+                    invoice_data,
+                    pmthash: bankify.getInvoicePmthash( invoice_data[ "request" ] ),
+                    amount: total * 1000,
+                    invoice: invoice_data[ "request" ],
+                    bolt11: invoice_data[ "request" ],
+                    quote: invoice_data[ "quote" ],
+                    type: "incoming",
+                    description: "NWC invoice",
+                    description_hash: "",
+                    preimage: "",
+                    payment_hash: bankify.getInvoicePmthash( invoice_data[ "request" ] ),
+                    fees_paid: 0,
+                    created_at: bolt11.decode( invoice_data.request ).timestamp,
+                    expires_at: bolt11.decode( invoice_data.request ).timeExpireDate,
+                    settled_at: null,
+                    paid: false,
+                }
+                await bankify.checkInvoiceTilPaidOrError( mymint, invoice_data, app_pubkey );
+                var [ invoice_for_merchant, checking_id_for_merchant ] = await nwcjs.getZapRequest( merchant_lnaddy, sats_for_merchant, relays );
+                showModal( 'about to make payment 1 of 2...' );
+                nwcjs.tryToPayInvoice( nwc_obj, invoice_for_merchant );
+                var loop = async () => {
+                    await super_nostr.waitSomeSeconds( 3 );
+                    var receipt = await getZapReceipt( checking_id_for_merchant );
+                    if ( receipt ) return receipt;
+                    return loop();
+                }
+                await loop();
+                showModal( 'done with payment 1 of 2' );
+                var [ invoice_for_affiliate, checking_id_for_affiliate ] = await nwcjs.getZapRequest( affiliate_lnaddy, sats_for_affiliate, relays );
+                nwcjs.tryToPayInvoice( nwc_obj, invoice_for_affiliate );
+                var loop = async () => {
+                    await super_nostr.waitSomeSeconds( 3 );
+                    var receipt = await getZapReceipt( checking_id_for_affiliate );
+                    if ( receipt ) return receipt;
+                    return loop();
+                }
+                await loop();
+                showModal( 'done with payment 2 of 2' );
+                await super_nostr.waitSomeSeconds( 2 );
+                modalVanish();
+            }
+            var getZapReceipt = async checking_id => {
+                var events = await nwcjs.getEvents( relays[ 0 ], null, [ 9735 ], null, null, 1, [ checking_id ], null, 5 );
+                if ( !events.length ) return;
+                return events[ 0 ];
+            }
+            var createQR = content => {
+                var dataUriPngImage = document.createElement( "img" ),
+                s = QRCode.generatePNG( content, {
+                    ecclevel: "M",
+                    format: "html",
+                    fillcolor: "#FFFFFF",
+                    textcolor: "#000000",
+                    margin: 4,
+                    modulesize: 8,
+                });
+                dataUriPngImage.src = s;
+                dataUriPngImage.className = "qr_code";
+                dataUriPngImage.style.width = "100%";
+                return dataUriPngImage;
             }
             // var what = await fetch( "https://lightlinksio-aehw.Replit.app/api/users/username/Guida" );
             // var json = await what.json();
@@ -476,5 +658,6 @@
         </script>
         <div class="black-bg hidden" onclick="modalVanish();"></div>
         <div class="modal hidden"></div>
+        <div class="toast"></div>
     </body>
 </html>
