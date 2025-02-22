@@ -4,17 +4,19 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, user-scalable=no">
         <script src="https://supertestnet.github.io/bankify/super_nostr.js"></script>
+        <script src="https://supertestnet.github.io/nwcjs/nwcjs.js"></script>
         <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
         <script src="https://bundle.run/bech32@2.0.0"></script>
         <script>
             //nsec1jhd5tlmnelfjv9gqnx0hdr48gsqttyyypky5z78v82ja0wptuvnqpqvzpl
             var dominus = e => e.target.parentElement.remove();
-            var doplus = () => {
+            var doplus = init => {
                 if ( $( '.plus_button' ) ) {
                     $( '.plus_button' ).classList.add( "minus_button" );
                     $( '.plus_button' ).innerHTML = 'Remove item';
                     $( '.plus_button' ).onclick = dominus;
                     $( '.plus_button' ).classList.remove( "plus_button" );
+                    if ( init ) $( '.products_option' ).click();
                 }
                 var html = `
                     <div class="product">
@@ -77,12 +79,13 @@
                 return "no hashtags";
             }
             var waitSomeTime = num => new Promise( resolve => setTimeout( resolve, num ) );
-            var affiliatePlus = () => {
+            var affiliatePlus = init => {
                 if ( $( '.affiliate_plus_button' ) ) {
                     $( '.affiliate_plus_button' ).classList.add( "affiliate_minus_button" );
                     $( '.affiliate_plus_button' ).innerHTML = '-';
                     $( '.affiliate_plus_button' ).onclick = dominus;
                     $( '.affiliate_plus_button' ).classList.remove( "affiliate_plus_button" );
+                    if ( init ) $( '.affiliates_option' ).click();
                 }
                 var html = `
                     <div class="affiliate">
@@ -96,7 +99,6 @@
                 div.getElementsByClassName( "affiliate_plus_button" )[ 0 ].onclick = affiliatePlus;
                 $( '.affiliates' ).append( div.firstElementChild );
             }
-
             var convertNEvent = nevent => {
                 var arr = bech32.bech32.fromWords( bech32.bech32.decode( nevent, 100_000 ).words );
                 var hex = bytesToHex( arr );
@@ -129,6 +131,8 @@
                 var nevent = bech32.bech32.encode( prefix, bech32.bech32.toWords( bytes ), 100_000 );
                 return nevent;
             }
+            var pubkeyToNpub = hex => bech32.bech32.encode( "npub", bech32.bech32.toWords( hexToBytes( hex ) ) );
+            var pubkeyFromNpub = npub => super_nostr.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( npub, 10_000 ).words ) );
         </script>
         <style>
             * {
@@ -225,6 +229,54 @@
             }
 
         </style>
+        <style>
+            .black-bg {
+                width: 100%;
+                position: fixed;
+                top: 0;
+                left: 0;
+                background-color: black;
+                opacity: .5;
+                width: 100vw;
+                height: 100vh;
+            }
+            .modal {
+                position: fixed;
+                box-sizing: border-box;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%,-50%);
+                width: 90%;
+                max-width: 560px;
+                background-color: white;
+                border-radius: 1rem;
+                padding: 20px;
+                color: black;
+                text-align: center;
+                word-wrap: break-word;
+            }
+            .modal * {
+                color: black;
+            }
+            .modal input, .modal textarea {
+                max-width: 90%;
+            }
+            .hidden {
+                display: none !important;
+            }
+        </style>
+        <script>
+            var modalVanish = () => {
+                $( ".black-bg" ).classList.add( "hidden" );
+                $( ".modal" ).classList.add( "hidden" );
+            }
+            var showModal = content => {
+                $( ".modal" ).innerHTML = `<div class="x_modal" style="position: absolute;right: 1rem;top: 0.5rem;font-size: 2rem; cursor: pointer; color: black;" onclick="modalVanish()">&times;</div>`;
+                $( ".modal" ).innerHTML += `<div style="overflow-y: auto; max-height: 80vh; margin-top: 1.5rem;">${content}</div>`;
+                $( ".black-bg" ).classList.remove( "hidden" );
+                $( ".modal" ).classList.remove( "hidden" );
+            }
+        </script>
         <script>
             var $ = document.querySelector.bind( document );
             var $$ = document.querySelectorAll.bind( document );
@@ -239,9 +291,20 @@
                 var vals = item.split( "=" );
                 params[ vals[ 0 ] ] = vals[ 1 ];
             });
+            if ( sessionStorage.privkey ) {
+                window.onload = () => {
+                    $( '.ensure_login' ).classList.add( "hidden" );
+                //     $( '.loading' ).classList.remove( "hidden" );
+                }
+            }
             if ( params.privkey ) {
+                window.onload = () => {
+                    $( '.ensure_login' ).classList.add( "hidden" );
+                //     $( '.options' ).classList.remove( "hidden" );
+                }
                 var privkey = super_nostr.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( params.privkey ).words ) );
-                window.location.href = window.location.href.substring( 0, window.location.href.indexOf( "#" ) );
+                //TODO: uncomment the line below
+                // window.location.href = window.location.href.substring( 0, window.location.href.indexOf( "#" ) );
                 params.privkey = privkey;
                 var pubkey = super_nostr.getPubkey( privkey );
                 sessionStorage.privkey = privkey;
@@ -301,23 +364,45 @@
     </head>
     <body>
         <h1>Welcome to lightlinks admin</h1>
-        <p>Please create a product</p>
-        <div class="option">
-            <div class="label">Products</div>
-            <div class="sometimes_invisible products hidden"></div>
-            <div class="submit_div hidden"><button onclick="submitProducts();">Submit</button></div>
+        <div class="loading">loading...</div>
+        <div class="ensure_login">
+            You need to be logged in. Go to lightlinks.io
         </div>
-        <div class="option">
-            <div class="label">Affiliates</div>
-            <div class="sometimes_invisible affiliates hidden"></div>
-            <div class="submit_div hidden"><button onclick="submitAffiliates();">Submit</button></div>
+        <div class="lud16_entry_form hidden">
+            <p>Enter a lightning address</p>
+            <p><input class="lud16_form"></p>
+            <p><button class="submit_lud16_form" onclick="submitLud16();">Submit</button></form>
+        </div>
+        <div class="options hidden">
+            <p>Please create a product</p>
+            <div class="option products_option">
+                <div class="label">Products</div>
+                <div class="sometimes_invisible products hidden"></div>
+                <div class="submit_div hidden"><button onclick="submitProducts();">Submit</button></div>
+            </div>
+            <div class="option affiliates_option">
+                <div class="label">Affiliates</div>
+                <div class="sometimes_invisible affiliates hidden"></div>
+                <div class="submit_div hidden"><button onclick="submitAffiliates();">Submit</button></div>
+            </div>
         </div>
         <script>
             var events = null;
             var relays = [ "wss://relay.damus.io" ];
             $$( '.option' ).forEach( item => item.onclick = e => {
-                if ( e.target.parentElement.tagName !== "DIV" ) var target = e.target.getElementsByClassName( "sometimes_invisible" )[ 0 ];
-                else var target = e.target.parentElement.getElementsByClassName( "sometimes_invisible" )[ 0 ];
+                var findParent = ( node, num_of_ups = 0 ) => {
+                    if ( !node.parentElement ) return;
+                    if ( node.parentElement.classList.contains( "sometimes_invisible" ) ) return;
+                    if ( node.parentElement.classList.contains( "option" ) ) return num_of_ups;
+                    num_of_ups = num_of_ups + 1;
+                    return findParent( node.parentElement, num_of_ups );
+                }
+                var num_of_ups = findParent( e.target );
+                var target = e.target;
+                var i; for ( i=0; i<num_of_ups + 1; i++ ) {
+                    target = target[ "parentElement" ];
+                }
+                var target = target.getElementsByClassName( "sometimes_invisible" )[ 0 ];
                 if ( !target ) return;
                 if ( target.classList.contains( "hidden" ) ) {
                     target.classList.remove( "hidden" );
@@ -382,8 +467,50 @@
                 super_nostr.sendEvent( event, relays[ 0 ] );
                 console.log( event );
             }
-            doplus();
-            affiliatePlus();
+            var submitLud16 = async () => {
+                var lnaddy = $( '.lud16_form' ).value;
+                var msg = JSON.stringify({"lud16":`${lnaddy}`});
+                var privkey = params.privkey;
+                if ( !privkey ) privkey = sessionStorage.privkey;
+                var event = await super_nostr.prepEvent( privkey, msg, 0, [] );
+                console.log( 'sent!' );
+                console.log( event );
+                super_nostr.sendEvent( event, relays[ 0 ] );
+                showModal( 'success! Refresh your page' );
+            }
+            var getZapReceipt = async checking_id => {
+                var events = await nwcjs.getEvents( relays[ 0 ], null, [ 9735 ], null, null, 1, [ checking_id ], null, 3 );
+                if ( !events.length ) return;
+                return events[ 0 ];
+            }
+            (async()=>{
+                doplus( "init" );
+                affiliatePlus( "init" );
+                $( '.lud16_form' ).value = '';
+                var pubkey = sessionStorage.pubkey;
+                if ( params.pubkey ) pubkey = params.pubkey;
+                if ( !pubkey ) return;
+                //TODO: remove this pubkey
+                // var pubkey = `2183e94758481d0f124fbd93c56ccaa45e7e545ceeb8d52848f98253f497b975`;
+                var events = await super_nostr.getEvents( relays[ 0 ], null, [ pubkey ], [ 0 ], null, null, 1 );
+                console.log( events );
+                if ( !events.length ) {
+                    $( '.lud16_entry_form' ).classList.remove( "hidden" );
+                    $( '.options' ).classList.add( "hidden" );
+                    $( '.loading' ).classList.add( "hidden" );
+                    return;
+                } else {
+                    $( '.options' ).classList.remove( "hidden" );
+                    $( '.loading' ).classList.add( "hidden" );
+                }
+                var lnaddy = JSON.parse( events[ 0 ].content ).lud16;
+                var [ invoice, checking_id ] = await nwcjs.getZapRequest( lnaddy, 1000, relays );
+                console.log( invoice, checking_id );
+                var receipt = await getZapReceipt( checking_id );
+                console.log( receipt );
+            })();
         </script>
+        <div class="black-bg hidden" onclick="modalVanish();"></div>
+        <div class="modal hidden"></div>
     </body>
 </html>
