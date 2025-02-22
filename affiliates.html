@@ -7,6 +7,9 @@
         <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
         <script src="https://bundle.run/bech32@2.0.0"></script>
         <script>
+            //nsec14psexusn98c97d7ujl06stql0exe6e7nj3cww0afxxlc9vsn4sdsss5kcd
+            //pubkey:
+            //9ac9721c7b02e520f554535779b5e6ddb247f00d88f5d89cfb994c2250439862
             var dominus = e => e.target.parentElement.remove();
             var doplus = () => {
                 if ( $( '.plus_button' ) ) {
@@ -90,6 +93,7 @@
                 return "no data";
             }
             var pubkeyToNpub = hex => bech32.bech32.encode( "npub", bech32.bech32.toWords( hexToBytes( hex ) ) );
+            var pubkeyFromNpub = npub => super_nostr.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( npub, 10_000 ).words ) );
         </script>
         <style>
             * {
@@ -170,6 +174,54 @@
                 line-height: 1.8rem;
             }
         </style>
+        <style>
+            .black-bg {
+                width: 100%;
+                position: fixed;
+                top: 0;
+                left: 0;
+                background-color: black;
+                opacity: .5;
+                width: 100vw;
+                height: 100vh;
+            }
+            .modal {
+                position: fixed;
+                box-sizing: border-box;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%,-50%);
+                width: 90%;
+                max-width: 560px;
+                background-color: white;
+                border-radius: 1rem;
+                padding: 20px;
+                color: black;
+                text-align: center;
+                word-wrap: break-word;
+            }
+            .modal * {
+                color: black;
+            }
+            .modal input, .modal textarea {
+                max-width: 90%;
+            }
+            .hidden {
+                display: none !important;
+            }
+        </style>
+        <script>
+            var modalVanish = () => {
+                $( ".black-bg" ).classList.add( "hidden" );
+                $( ".modal" ).classList.add( "hidden" );
+            }
+            var showModal = content => {
+                $( ".modal" ).innerHTML = `<div class="x_modal" style="position: absolute;right: 1rem;top: 0.5rem;font-size: 2rem; cursor: pointer; color: black;" onclick="modalVanish()">&times;</div>`;
+                $( ".modal" ).innerHTML += `<div style="overflow-y: auto; max-height: 80vh; margin-top: 1.5rem;">${content}</div>`;
+                $( ".black-bg" ).classList.remove( "hidden" );
+                $( ".modal" ).classList.remove( "hidden" );
+            }
+        </script>
         <script>
             var $ = document.querySelector.bind( document );
             var $$ = document.querySelectorAll.bind( document );
@@ -186,7 +238,8 @@
             });
             if ( params.privkey ) {
                 var privkey = super_nostr.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( params.privkey ).words ) );
-                window.location.href = window.location.href.substring( 0, window.location.href.indexOf( "#" ) );
+                //TODO: uncomment the line below
+                // window.location.href = window.location.href.substring( 0, window.location.href.indexOf( "#" ) );
                 params.privkey = privkey;
                 var pubkey = super_nostr.getPubkey( privkey );
                 sessionStorage.privkey = privkey;
@@ -195,82 +248,121 @@
         </script>
     </head>
     <body>
+        <div class="loading">
+            loading...
+        </div>
         <div class="links"></div>
-        <div class="merchants_and_products">
-            <h2>Who you can affiliate with</h2>
-        </div>
-        <div class="form"></div>
-        <div class="user_affiliations">
-            <h2>Your affiliations</h2>
-        </div>
-        <div class="submit_div">
-            <button class="submit_products" onclick="submitProducts();">Submit</button>
+        <div class="edit_page hidden">
+            <div class="merchants_and_products">
+                <h2>Who you can affiliate with</h2>
+            </div>
+            <div class="form"></div>
+            <div class="user_affiliations">
+                <h2>Your affiliations</h2>
+            </div>
+            <div class="submit_div">
+                <button class="submit_products" onclick="submitProducts();">Submit</button>
+            </div>
         </div>
         <script>
-            //nsec14psexusn98c97d7ujl06stql0exe6e7nj3cww0afxxlc9vsn4sdsss5kcd
             var relays = [ 'wss://relay.damus.io' ];
-            var list_of_merchants = [
-                "1ac95c4a4353452ecf1c115d4ea2dfc09b5f404ec415b02bdd51e5180ae388e5",
-                "73919df38b372fd19d323f089fd1cc148b8b74eb764947a81f5c0fb2384c116d",
-            ];
-            var submitProducts = async () => {
-                var products_and_links = [];
-                $$( '.affiliated_product' ).forEach( item => products_and_links.push( item.getAttribute( "data-nevent" ) ) );
-                console.log( products_and_links );
-                var tags = [];
-                products_and_links.forEach( nevent => {
-                    tags.push( [ "classified", nevent ] );
-                });
-                var event = await super_nostr.prepEvent( sessionStorage.privkey, "", 13166, tags );
-                super_nostr.sendEvent( event, relays[ 0 ] );
-            }
-            var addToAffiliations = ( product, event_name, merchant ) => {
-                var nevent = product.getAttribute( "data-nevent" );
-                var div = document.createElement( "div" );
-                div.innerHTML = `
-                    <div class="affiliated_product" data-nevent="${nevent}">Product: ${event_name}<br><br>Merchant: ${merchant}<div style="margin-top: 1rem;"></div>
-                `;
-                $( '.user_affiliations' ).append( div.firstElementChild );
-            }
-            doplus();
-            (async()=>{
-                var info = {}
-                var events = await super_nostr.getEvents( relays[ 0 ], null, list_of_merchants, [30402] );
-                var j; for ( j=0; j<events.length; j++ ) {
-                    var event = events[ j ];
-                    var merchant_pubkey = event.pubkey;
-                    var npub = pubkeyToNpub( merchant_pubkey );
-                    var prejson = await fetch( `https://lightlinksio-aehw.Replit.app/api/users/pubkey/${npub}` );
-                    var json = await prejson.json();
-                    var merchant = json.username;
-                    var nevent = convertPubkeyAndRelaysToNprofile( "nevent", events[ 0 ].id, relays );
-                    var event_name = extractTagFromNostrEvent( event, "title" );
-                    var html = `
-                        <div class="product" data-nevent="${nevent}">Product: ${event_name}<br><br>Merchant: ${merchant}<div style="margin-top: 1rem;"><button onclick="addToAffiliations( this.parentElement.parentElement, '${event_name}', '${merchant}' );">Affiliate market this product</div></div>
-                    `;
-                    var div = document.createElement( "div" );
-                    div.innerHTML = html;
-                    $( '.merchants_and_products' ).append( div );
+            sessionStorage.removeItem( "privkey" );
+            sessionStorage.removeItem( "pubkey" );
+            var privkey = sessionStorage.privkey;
+            if ( !sessionStorage.privkey ) privkey = params.privkey;
+            if ( privkey ) {
+                var list_of_merchants = [
+                    "1ac95c4a4353452ecf1c115d4ea2dfc09b5f404ec415b02bdd51e5180ae388e5",
+                    "73919df38b372fd19d323f089fd1cc148b8b74eb764947a81f5c0fb2384c116d",
+                ];
+                var submitProducts = async () => {
+                    var privkey = sessionStorage.privkey;
+                    if ( !sessionStorage.privkey ) privkey = params.privkey;
+                    console.log( privkey, params );
+                    var products_and_links = [];
+                    $$( '.affiliated_product' ).forEach( item => products_and_links.push( item.getAttribute( "data-nevent" ) ) );
+                    console.log( products_and_links );
+                    var tags = [];
+                    products_and_links.forEach( nevent => {
+                        tags.push( [ "classified", nevent ] );
+                    });
+                    var event = await super_nostr.prepEvent( privkey, "", 13166, tags );
+                    super_nostr.sendEvent( event, relays[ 0 ] );
+                    showModal( 'Success, your affiliations were submitted' );
                 }
-                // events = await super_nostr.getEvents('wss://relay.damus.io', null, [$_GET.affiliate], [13166]);
-                // events[ 0 ].tags.forEach( tag => {
-                //     if ( tag[ 0 ] === "link" ) {
-                //         var div = document.createElement( "div" );
-                //         div.innerHTML = `
-                //             <div class="link">
-                //                 <span class="link_desc"></span>
-                //             </div>
-                //         `;
-                //         var link = div.firstElementChild;
-                //         link.getElementsByClassName( "link_desc" )[ 0 ].innerText = tag[ 2 ];
-                //         link.onclick = () => window.open( tag[ 1 ], "_blank" );
-                //         $( '.links' ).append( link );
-                //     }
-                //     if ( tag[ 0 ] === "classified" ) {
-                //         console.log( tag );
-                //     }
-                // });
-            })();
+                var addToAffiliations = ( product, event_name, merchant ) => {
+                    var nevent = product.getAttribute( "data-nevent" );
+                    if ( $$( `[data-nevent="${nevent}"]` ).length > 1 ) return;
+                    var div = document.createElement( "div" );
+                    div.innerHTML = `
+                        <div class="affiliated_product" data-nevent="${nevent}">Product: ${event_name}<br><br>Merchant: ${merchant}<div style="margin-top: 1rem;"></div>
+                    `;
+                    $( '.user_affiliations' ).append( div.firstElementChild );
+                }
+                doplus();
+                (async()=>{
+                    var info = {}
+                    var events = await super_nostr.getEvents( relays[ 0 ], null, list_of_merchants, [30402] );
+                    $( '.edit_page' ).classList.remove( 'hidden' );
+                    var j; for ( j=0; j<events.length; j++ ) {
+                        var event = events[ j ];
+                        var merchant_pubkey = event.pubkey;
+                        var npub = pubkeyToNpub( merchant_pubkey );
+                        var prejson = await fetch( `https://lightlinksio-aehw.Replit.app/api/users/pubkey/${npub}` );
+                        $( '.loading' ).classList.add( 'hidden' );
+                        var json = await prejson.json();
+                        var merchant = json.username;
+                        var nevent = convertPubkeyAndRelaysToNprofile( "nevent", events[ j ].id, relays );
+                        var event_name = extractTagFromNostrEvent( event, "title" );
+                        var html = `
+                            <div class="product" data-nevent="${nevent}">Product: ${event_name}<br><br>Merchant: ${merchant}<div style="margin-top: 1rem;"><button onclick="addToAffiliations( this.parentElement.parentElement, '${event_name}', '${merchant}' );">Affiliate market this product</div></div>
+                        `;
+                        var div = document.createElement( "div" );
+                        div.innerHTML = html;
+                        $( '.merchants_and_products' ).append( div );
+                    }
+                })();
+            } else {
+                var username = window.location.href.substring( window.location.href.indexOf( "io/" ) + 3 );
+                console.log( username );
+                var pubkey = "9ac9721c7b02e520f554535779b5e6ddb247f00d88f5d89cfb994c2250439862";
+                var events = null;
+                (async()=>{
+                    events = await super_nostr.getEvents('wss://relay.damus.io', null, [ pubkey ], [13166]);
+                    $( '.loading' ).classList.add( 'hidden' );
+                    if ( !events.length ) return;
+                    var i; for ( i=0; i<events[ 0 ].tags.length; i++ ) {
+                        var tag = events[ 0 ].tags[ i ];
+                        if ( tag[ 0 ] === "link" ) {
+                            var div = document.createElement( "div" );
+                            div.innerHTML = `
+                                <div class="link">
+                                    <span class="link_desc"></span>
+                                </div>
+                            `;
+                            var link = div.firstElementChild;
+                            link.getElementsByClassName( "link_desc" )[ 0 ].innerText = tag[ 2 ];
+                            link.onclick = () => window.open( tag[ 1 ], "_blank" );
+                            $( '.links' ).append( link );
+                        }
+                        if ( tag[ 0 ] === "classified" ) {
+                            var div = document.createElement( "div" );
+                            div.innerHTML = `
+                                <div class="classified">
+                                    <span class="link_desc"></span>
+                                </div>
+                            `;
+                            var link = div.firstElementChild;
+                            var nevent = tag[ 1 ];
+                            var [ eid, relays ] = convertNEvent( nevent );
+                            var events_to_display = await super_nostr.getEvents( relays[ 0 ], eid );
+                            console.log( events_to_display );
+                            link.getElementsByClassName( "link_desc" )[ 0 ].innerText = '';
+                            $( '.links' ).append( link );
+                        }
+                    }
+                })();
+            }
             // var what = await fetch( "https://lightlinksio-aehw.Replit.app/api/users/username/Guida" );
             // var json = await what.json();
             // console.log( json.npub );
@@ -279,5 +371,7 @@
             // console.log( json.username );
             // nifty's pubkey: npub1wwgemuutxuhar8fj8uyfl5wvzj9cka8twey502qlts8mywzvz9ksqepsdd
         </script>
+        <div class="black-bg hidden" onclick="modalVanish();"></div>
+        <div class="modal hidden"></div>
     </body>
 </html>
