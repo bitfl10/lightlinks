@@ -4,45 +4,35 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, user-scalable=no">
         <script src="https://supertestnet.github.io/bankify/super_nostr.js"></script>
-        <script src="https://supertestnet.github.io/nwcjs/nwcjs.js"></script>
         <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
         <script src="https://bundle.run/bech32@2.0.0"></script>
         <script>
-            //nsec1jhd5tlmnelfjv9gqnx0hdr48gsqttyyypky5z78v82ja0wptuvnqpqvzpl
+            //nsec14psexusn98c97d7ujl06stql0exe6e7nj3cww0afxxlc9vsn4sdsss5kcd
+            //pubkey:
+            //9ac9721c7b02e520f554535779b5e6ddb247f00d88f5d89cfb994c2250439862
             var dominus = e => e.target.parentElement.remove();
-            var doplus = init => {
+            var doplus = () => {
                 if ( $( '.plus_button' ) ) {
                     $( '.plus_button' ).classList.add( "minus_button" );
-                    $( '.plus_button' ).innerHTML = 'Remove item';
+                    $( '.plus_button' ).innerHTML = '-';
                     $( '.plus_button' ).onclick = dominus;
                     $( '.plus_button' ).classList.remove( "plus_button" );
-                    // if ( init ) $( '.products_option' ).click();
                 }
                 var html = `
                     <div class="product">
-                        <p>Product title</p>
-                        <input class="product_title">
-                        <p>Price (in sats)</p>
-                        <input class="price">
-                        <p>Location</p>
-                        <input class="location">
-                        <p>Affiliate discount (percentage)</p>
-                        <input class="discount">
-                        <p>Short description</p>
-                        <input class="short_desc">
-                        <p>Long description</p>
-                        <textarea class="long_desc"></textarea>
-                        <p>Categories (comma separated)</p>
-                        <input class="categories">
-                        <p>Image</p>
-                        <input class="product_image">
-                        <button class="plus_button">Add item</button>
+                        <div>
+                            <div class="checkbox_label">Check the box if this is a product</div>
+                            <input class="link_checkbox" type="checkbox">
+                        </div>
+                        <p>Give a link or a product identifier (nevent)</p>
+                        <input class="identifier">
+                        <span class="plus_button">+</span>
                     </div>
                 `;
                 var div = document.createElement( "div" );
                 div.innerHTML = html;
                 div.getElementsByClassName( "plus_button" )[ 0 ].onclick = doplus;
-                $( '.products' ).append( div.firstElementChild );
+                // $( '.form' ).append( div.firstElementChild );
             }
             var hexToText = hex => {
                 var bytes = new Uint8Array( Math.ceil( hex.length / 2 ) );
@@ -58,47 +48,6 @@
             }
             var hexToBytes = hex => Uint8Array.from( hex.match( /.{1,2}/g ).map( byte => parseInt( byte, 16 ) ) );
             var bytesToHex = bytes => bytes.reduce( ( str, byte ) => str + byte.toString( 16 ).padStart( 2, "0" ), "" );
-            var extractTagFromNostrEvent = ( event, tag ) => {
-                var data = null;
-                event.tags.every( item => {
-                    if ( item[ 0 ] === tag ) {
-                        data = item[ 1 ];
-                        return;
-                    }
-                    return true;
-                });
-                if ( data ) return data;
-                return "no data";
-            }
-            var extractHashtagsFromNostrEvent = event => {
-                var hashtags = [];
-                event.tags.forEach( item => {
-                    if ( item[ 0 ] === "t" ) hashtags.push( item[ 1 ] );
-                });
-                if ( hashtags ) return hashtags;
-                return "no hashtags";
-            }
-            var waitSomeTime = num => new Promise( resolve => setTimeout( resolve, num ) );
-            var affiliatePlus = init => {
-                if ( $( '.affiliate_plus_button' ) ) {
-                    $( '.affiliate_plus_button' ).classList.add( "affiliate_minus_button" );
-                    $( '.affiliate_plus_button' ).innerHTML = '-';
-                    $( '.affiliate_plus_button' ).onclick = dominus;
-                    $( '.affiliate_plus_button' ).classList.remove( "affiliate_plus_button" );
-                    // if ( init ) $( '.affiliates_option' ).click();
-                }
-                var html = `
-                    <div class="affiliate">
-                        <p>Affiliate npub</p>
-                        <input class="affiliate_nprofile">
-                        <span class="affiliate_plus_button">+</span>
-                    </div>
-                `;
-                var div = document.createElement( "div" );
-                div.innerHTML = html;
-                div.getElementsByClassName( "affiliate_plus_button" )[ 0 ].onclick = affiliatePlus;
-                $( '.affiliates' ).append( div.firstElementChild );
-            }
             var convertNEvent = nevent => {
                 var arr = bech32.bech32.fromWords( bech32.bech32.decode( nevent, 100_000 ).words );
                 var hex = bytesToHex( arr );
@@ -131,6 +80,18 @@
                 var nevent = bech32.bech32.encode( prefix, bech32.bech32.toWords( bytes ), 100_000 );
                 return nevent;
             }
+            var extractTagFromNostrEvent = ( event, tag ) => {
+                var data = null;
+                event.tags.every( item => {
+                    if ( item[ 0 ] === tag ) {
+                        data = item[ 1 ];
+                        return;
+                    }
+                    return true;
+                });
+                if ( data ) return data;
+                return "no data";
+            }
             var pubkeyToNpub = hex => bech32.bech32.encode( "npub", bech32.bech32.toWords( hexToBytes( hex ) ) );
             var pubkeyFromNpub = npub => super_nostr.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( npub, 10_000 ).words ) );
         </script>
@@ -157,49 +118,38 @@
             h2 {
                 font-size: 1.5rem;
             }
-            input, textarea {
+            input {
                 line-height: 1.25;
                 width: 100%;
                 height: 1.8rem;
                 font-size: 1.15rem;
                 border: 1px solid grey;
             }
-            textarea {
-                height: auto;
-            }
             .hidden {
                 display: none !important;
             }
-            .option {
+            .link {
                 margin-bottom: 1rem;
                 padding: 1rem;
                 border: 1px solid black;
                 border-radius: 1rem;
                 background-color: #cccccc;
                 color: white;
-                font-weight: bold;
                 cursor: pointer;
             }
-            .affiliates {
-                background-color: white;
-                color: black;
+            .checkbox_label, .link_checkbox {
+                display: inline-block;
+                vertical-align: middle;
+            }
+            input[class='link_checkbox'] {
+                display: inline-block;
+                width: .85rem;
+            }
+            .product, .affiliated_product {
+                margin-top: 1rem;
                 padding: 1rem;
                 border: 1px solid black;
                 border-radius: 1rem;
-                margin-top: 1rem;
-                cursor: auto;
-            }
-            .product {
-                padding: 1rem;
-                border: 1px solid black;
-                border-radius: 1rem;
-                margin-top: 1rem;
-                background-color: white;
-                color: black;
-                cursor: auto;
-            }
-            .affiliate:first-child {
-                margin-top: -.5rem;
             }
             .submit_div button {
                 margin-top: 1rem;
@@ -209,14 +159,10 @@
             }
         </style>
         <style>
-            .plus_button, .minus_button {
-                margin-top: 1.5rem;
-                width: 100%;
-            }
-            .affiliate_nprofile {
+            .identifier {
                 width: calc( 100% - 2.5rem );
             }
-            .affiliate_plus_button, .affiliate_minus_button {
+            .plus_button, .minus_button {
                 display: inline-block;
                 border: 1px solid grey;
                 padding: 0px 5px;
@@ -227,7 +173,6 @@
                 height: 1.8rem;
                 line-height: 1.8rem;
             }
-
         </style>
         <style>
             .black-bg {
@@ -291,17 +236,7 @@
                 var vals = item.split( "=" );
                 params[ vals[ 0 ] ] = vals[ 1 ];
             });
-            if ( sessionStorage.privkey ) {
-                window.onload = () => {
-                    $( '.ensure_login' ).classList.add( "hidden" );
-                //     $( '.loading' ).classList.remove( "hidden" );
-                }
-            }
             if ( params.privkey ) {
-                window.onload = () => {
-                    $( '.ensure_login' ).classList.add( "hidden" );
-                //     $( '.options' ).classList.remove( "hidden" );
-                }
                 var privkey = super_nostr.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( params.privkey ).words ) );
                 //TODO: uncomment the line below
                 // window.location.href = window.location.href.substring( 0, window.location.href.indexOf( "#" ) );
@@ -310,205 +245,146 @@
                 sessionStorage.privkey = privkey;
                 sessionStorage.pubkey = pubkey;
             }
-            var loadEvents = async () => {
-                var privkey = sessionStorage.privkey;
-                var pubkey = sessionStorage.pubkey;
-                events = await super_nostr.getEvents('wss://relay.damus.io', null, [ pubkey ], [30402, 13167]);
-                events.reverse();
-                var i; for ( i=0; i<events.length; i++ ) {
-                    var event = events[ i ];
-                    if ( event.kind === 13167 ) {
-                        parse13167( event );
-                        continue;
-                    }
-                    var parsedEvent = {
-                        title: extractTagFromNostrEvent( event, "title" ),
-                        price: extractTagFromNostrEvent( event, "price" ),
-                        location: extractTagFromNostrEvent( event, "location" ),
-                        discount: extractTagFromNostrEvent( event, "discount" ),
-                        short_desc: extractTagFromNostrEvent( event, "summary" ),
-                        long_desc: event.content,
-                        categories: extractHashtagsFromNostrEvent( event ),
-                        product_image: extractTagFromNostrEvent( event, "image" ),
-                    }
-                    var product = $$( '.product' )[ $$( '.product' ).length - 1 ];
-                    product.getElementsByClassName( "product_title" )[ 0 ].value = parsedEvent.title;
-                    product.getElementsByClassName( "price" )[ 0 ].value = parsedEvent.price;
-                    product.getElementsByClassName( "location" )[ 0 ].value = parsedEvent.location;
-                    product.getElementsByClassName( "discount" )[ 0 ].value = parsedEvent.discount;
-                    product.getElementsByClassName( "short_desc" )[ 0 ].value = parsedEvent.short_desc;
-                    product.getElementsByClassName( "long_desc" )[ 0 ].value = parsedEvent.long_desc;
-                    product.getElementsByClassName( "categories" )[ 0 ].value = parsedEvent.categories.join( ", " );
-                    product.getElementsByClassName( "product_image" )[ 0 ].value = parsedEvent.product_image;
-                    $( '.plus_button' ).click();
-                    await waitSomeTime( 100 );
-                }
-                await waitSomeTime( 1000 );
-                params.privkey = sessionStorage.privkey;
-                sessionStorage.removeItem( "privkey" );
-                sessionStorage.removeItem( "pubkey" );
-            }
-            var parse13167 = async event => {
-                event.tags.reverse();
-                var i; for ( i=0; i<event.tags.length; i++ ) {
-                    var tag = event.tags[ i ];
-                    var npub_form = $$( '.affiliate_nprofile' )[ $$( '.affiliate_nprofile' ).length - 1 ];
-                    if ( !tag[ 1 ] ) continue;
-                    npub_form.value = tag[ 1 ];
-                    $( '.affiliate_plus_button' ).click();
-                    await waitSomeTime( 100 );
-                }
-            }
-            loadEvents();
         </script>
     </head>
     <body>
-        <h1>Welcome to lightlinks admin</h1>
-        <div class="loading">loading...</div>
-        <div class="ensure_login">
-            You need to be logged in. Go to lightlinks.io
+        <div class="loading">
+            loading...
         </div>
-        <div class="lud16_entry_form hidden">
-            <p>Enter a lightning address where your users can send money when they buy your products</p>
-            <p><input class="lud16_form"></p>
-            <p><button class="submit_lud16_form" onclick="submitLud16();">Submit</button></form>
-        </div>
-        <div class="options hidden">
-            <p>Please create a product</p>
-            <div class="option products_option">
-                <div class="label">Products</div>
-                <div class="sometimes_invisible products hidden"></div>
-                <div class="submit_div hidden"><button onclick="submitProducts();">Submit</button></div>
+        <div class="links"></div>
+        <div class="edit_page hidden">
+            <div class="merchants_and_products">
+                <h2>Who you can affiliate with</h2>
             </div>
-            <div class="option affiliates_option">
-                <div class="label">Affiliates</div>
-                <div class="sometimes_invisible affiliates hidden"></div>
-                <div class="submit_div hidden"><button onclick="submitAffiliates();">Submit</button></div>
+            <div class="form"></div>
+            <div class="user_affiliations">
+                <h2>Your affiliations</h2>
+            </div>
+            <div class="submit_div">
+                <button class="submit_products" onclick="submitProducts();">Submit</button>
             </div>
         </div>
         <script>
-            var events = null;
-            var relays = [ "wss://relay.damus.io" ];
-            $$( '.option' ).forEach( item => item.onclick = e => {
-                var findParent = ( node, num_of_ups = 0 ) => {
-                    if ( !node.parentElement ) return;
-                    if ( node.parentElement.classList.contains( "sometimes_invisible" ) ) return;
-                    if ( node.parentElement.classList.contains( "option" ) ) return num_of_ups;
-                    num_of_ups = num_of_ups + 1;
-                    return findParent( node.parentElement, num_of_ups );
-                }
-                var num_of_ups = findParent( e.target );
-                var target = e.target;
-                var i; for ( i=0; i<num_of_ups + 1; i++ ) {
-                    target = target[ "parentElement" ];
-                }
-                var target = target.getElementsByClassName( "sometimes_invisible" )[ 0 ];
-                if ( !target ) return;
-                if ( target.classList.contains( "hidden" ) ) {
-                    target.classList.remove( "hidden" );
-                    target.parentElement.getElementsByClassName( "submit_div" )[ 0 ].classList.remove( "hidden" );
-                } else {
-                    target.classList.add( "hidden" );
-                    target.parentElement.getElementsByClassName( "submit_div" )[ 0 ].classList.add( "hidden" );
-                }
-            });
-            var submitProducts = async () => {
-                var privkey = params.privkey;
-                var products = [];
-                $$( '.product' ).forEach( item => {
-                    products.push({
-                        title: item.getElementsByClassName( "product_title" )[ 0 ].value,
-                        price: Number( item.getElementsByClassName( "price" )[ 0 ].value ),
-                        location: item.getElementsByClassName( "location" )[ 0 ].value,
-                        discount: Number( item.getElementsByClassName( "discount" )[ 0 ].value ),
-                        short_desc: item.getElementsByClassName( "short_desc" )[ 0 ].value,
-                        long_desc: item.getElementsByClassName( "long_desc" )[ 0 ].value,
-                        categories: item.getElementsByClassName( "categories" )[ 0 ].value.split( "," ),
-                        product_image: item.getElementsByClassName( "product_image" )[ 0 ].value,
+            var relays = [ 'wss://relay.damus.io' ];
+            sessionStorage.removeItem( "privkey" );
+            sessionStorage.removeItem( "pubkey" );
+            var privkey = sessionStorage.privkey;
+            if ( !sessionStorage.privkey ) privkey = params.privkey;
+            var pubkey = super_nostr.getPubkey( privkey );
+            if ( privkey ) {
+                var list_of_merchants = [
+                    "73919df38b372fd19d323f089fd1cc148b8b74eb764947a81f5c0fb2384c116d",
+                ];
+                var submitProducts = async () => {
+                    var privkey = sessionStorage.privkey;
+                    if ( !sessionStorage.privkey ) privkey = params.privkey;
+                    console.log( privkey, params );
+                    var products_and_links = [];
+                    $$( '.affiliated_product' ).forEach( item => products_and_links.push( item.getAttribute( "data-nevent" ) ) );
+                    console.log( products_and_links );
+                    var tags = [];
+                    products_and_links.forEach( nevent => {
+                        tags.push( [ "classified", nevent ] );
                     });
-                });
-                products.forEach( ( item, index ) => {
-                    item.categories.forEach( ( cat, idx ) => {
-                        if ( cat.startsWith( " " ) ) products[ index ].categories[ idx ] = cat.substring( 1 );
-                    });
-                });
-                console.log( products );
-                products.forEach( async product => {
-                    var msg = product.long_desc;
-                    var tags = [
-                        [ "title", product.title ],
-                        [ "published_at", String( Math.floor( Date.now() / 1000 ) ) ],
-                        [ "image", product.product_image ],
-                        [ "summary", product.short_desc ],
-                        [ "location", product.location ],
-                        [ "price", `${product.price}`, "sats", "never", "active" ],
-                        [ "discount", `${product.discount}`, "percent" ],
-                    ];
-                    product.categories.forEach( cat => tags.push( [ "t", cat ] ) );
-                    var event = await super_nostr.prepEvent( privkey, msg, 30402, tags );
+                    var event = await super_nostr.prepEvent( privkey, "", 13166, tags );
                     super_nostr.sendEvent( event, relays[ 0 ] );
-                    console.log( event );
-                });
-            }
-            var submitAffiliates = async () => {
-                var privkey = params.privkey;
-                //list of nprofiles:
-                //nprofile1qqszrqlfgavys8g0zf8mmy79dn92ghn723wwawx49py0nqjn7jtmjagppamhxue69uhkummnw3ezumt0d5qs6amnwvaz7tmwdaejumr0dssraqwh
-                //nprofile1qqsv6sy2d8xxcumu5xnkalpl5frudjjnajq87mnuj46pvsty09lgzcspz3mhxue69uhhyetvv9ujuerpd46hxtnfduqs6amnwvaz7tmwdaejumr0dsqkvamnwvaz7tmxd9k8getj9ehx7um5wgh8w6twv5hkuur4vgck2dr3vu6nvamkvsek26r9vajrserdxaexcem28p3k6wfe8pkhjufsv95rsefews6h5et3ddnnwaphwvunxufhx5c8qdek8a38ymmpv33kzum58468yat9qyt8wumn8ghj7un9d3shjtnwdaehgu3wvfskueqpp4mhxue69uhhjctzw5hx6egpypmhxue69uhhyetvv9uj66ns9ehx7um5wgh8w6tjv4jxuet59e48q904jph
-                var nprofiles = [];
-                $$( '.affiliate_nprofile' ).forEach( item => nprofiles.push( [ "affiliate", item.value ] ) );
-                var event = {
-                    "kind": 13167,
-                    "created_at": Math.floor( Date.now() / 1000 ),
-                    "content": "",
-                    "tags": nprofiles,
+                    showModal( 'Success, your affiliations were submitted' );
                 }
-                var event = await super_nostr.prepEvent( privkey, "", 13167, nprofiles );
-                super_nostr.sendEvent( event, relays[ 0 ] );
-                console.log( event );
-            }
-            var submitLud16 = async () => {
-                var lnaddy = $( '.lud16_form' ).value;
-                var msg = JSON.stringify({"lud16":`${lnaddy}`});
-                var privkey = params.privkey;
-                if ( !privkey ) privkey = sessionStorage.privkey;
-                var event = await super_nostr.prepEvent( privkey, msg, 0, [] );
-                console.log( 'sent!' );
-                console.log( event );
-                super_nostr.sendEvent( event, relays[ 0 ] );
-                showModal( 'success! Refresh your page' );
-            }
-            var getZapReceipt = async checking_id => {
-                var events = await nwcjs.getEvents( relays[ 0 ], null, [ 9735 ], null, null, 1, [ checking_id ], null, 3 );
-                if ( !events.length ) return;
-                return events[ 0 ];
-            }
-            (async()=>{
-                doplus( "init" );
-                affiliatePlus( "init" );
-                $( '.lud16_form' ).value = '';
-                var pubkey = sessionStorage.pubkey;
-                if ( params.pubkey ) pubkey = params.pubkey;
-                if ( !pubkey ) return;
-                //TODO: remove this pubkey
-                // var pubkey = `2183e94758481d0f124fbd93c56ccaa45e7e545ceeb8d52848f98253f497b975`;
-                var events = await super_nostr.getEvents( relays[ 0 ], null, [ pubkey ], [ 0 ], null, null, 1 );
-                console.log( events );
-                if ( !events.length ) {
-                    $( '.lud16_entry_form' ).classList.remove( "hidden" );
-                    $( '.options' ).classList.add( "hidden" );
-                    $( '.loading' ).classList.add( "hidden" );
-                    return;
-                } else {
-                    $( '.options' ).classList.remove( "hidden" );
-                    $( '.loading' ).classList.add( "hidden" );
+                var addToAffiliations = ( nevent, event_name, merchant ) => {
+                    if ( $$( `[data-nevent="${nevent}"]` ).length > 1 ) return;
+                    var div = document.createElement( "div" );
+                    div.innerHTML = `
+                        <div class="affiliated_product" data-nevent="${nevent}">Product: ${event_name}<br><br>Merchant: ${merchant}<div style="margin-top: 1rem;"></div>
+                    `;
+                    $( '.user_affiliations' ).append( div.firstElementChild );
                 }
-                var lnaddy = JSON.parse( events[ 0 ].content ).lud16;
-                var [ invoice, checking_id ] = await nwcjs.getZapRequest( lnaddy, 1000, relays );
-                console.log( invoice, checking_id );
-                var receipt = await getZapReceipt( checking_id );
-                console.log( receipt );
-            })();
+                doplus();
+                (async()=>{
+                    var info = {}
+                    var events = await super_nostr.getEvents( relays[ 0 ], null, [ ...list_of_merchants, pubkey ], [30402, 13166] );
+                    $( '.edit_page' ).classList.remove( 'hidden' );
+                    var j; for ( j=0; j<events.length; j++ ) {
+                        var event = events[ j ];
+                        if ( event.kind === 13166 && event.pubkey === pubkey ) {
+                            parse13166( event );
+                            continue;
+                        }
+                        var merchant_pubkey = event.pubkey;
+                        var npub = pubkeyToNpub( merchant_pubkey );
+                        var prejson = await fetch( `https://lightlinksio-aehw.Replit.app/api/users/pubkey/${npub}` );
+                        $( '.loading' ).classList.add( 'hidden' );
+                        var json = await prejson.json();
+                        var merchant = json.username;
+                        var nevent = convertPubkeyAndRelaysToNprofile( "nevent", events[ j ].id, relays );
+                        var event_name = extractTagFromNostrEvent( event, "title" );
+                        var html = `
+                            <div class="product" data-nevent="${nevent}">Product: ${event_name}<br><br>Merchant: ${merchant}<div style="margin-top: 1rem;"><button onclick="addToAffiliations( '${nevent}', '${event_name}', '${merchant}' );">Affiliate market this product</div></div>
+                        `;
+                        var div = document.createElement( "div" );
+                        div.innerHTML = html;
+                        $( '.merchants_and_products' ).append( div );
+                    }
+                })();
+            } else {
+                var username = window.location.href.substring( window.location.href.indexOf( "io/" ) + 3 );
+                console.log( username );
+                var pubkey = "9ac9721c7b02e520f554535779b5e6ddb247f00d88f5d89cfb994c2250439862";
+                var events = null;
+                (async()=>{
+                    events = await super_nostr.getEvents('wss://relay.damus.io', null, [ pubkey ], [13166]);
+                    $( '.loading' ).classList.add( 'hidden' );
+                    if ( !events.length ) return;
+                    var i; for ( i=0; i<events[ 0 ].tags.length; i++ ) {
+                        var tag = events[ 0 ].tags[ i ];
+                        if ( tag[ 0 ] === "link" ) {
+                            var div = document.createElement( "div" );
+                            div.innerHTML = `
+                                <div class="link">
+                                    <span class="link_desc"></span>
+                                </div>
+                            `;
+                            var link = div.firstElementChild;
+                            link.getElementsByClassName( "link_desc" )[ 0 ].innerText = tag[ 2 ];
+                            link.onclick = () => window.open( tag[ 1 ], "_blank" );
+                            $( '.links' ).append( link );
+                        }
+                        if ( tag[ 0 ] === "classified" ) {
+                            var div = document.createElement( "div" );
+                            div.innerHTML = `
+                                <div class="classified">
+                                    <span class="link_desc"></span>
+                                </div>
+                            `;
+                            var link = div.firstElementChild;
+                            var nevent = tag[ 1 ];
+                            var [ eid, relays ] = convertNEvent( nevent );
+                            var events_to_display = await super_nostr.getEvents( relays[ 0 ], eid );
+                            console.log( events_to_display );
+                            link.getElementsByClassName( "link_desc" )[ 0 ].innerText = '';
+                            $( '.links' ).append( link );
+                        }
+                    }
+                })();
+            }
+            var parse13166 = async event => {
+                console.log( event );
+                var merchant_pubkey = event.pubkey;
+                var npub = pubkeyToNpub( merchant_pubkey );
+                var prejson = await fetch( `https://lightlinksio-aehw.Replit.app/api/users/pubkey/${npub}` );
+                $( '.loading' ).classList.add( 'hidden' );
+                var json = await prejson.json();
+                var nevent = convertPubkeyAndRelaysToNprofile( "nevent", event.id, relays );
+                var event_name = extractTagFromNostrEvent( event, "title" );
+                var merchant = json.username;
+                addToAffiliations( nevent, event_name, merchant );
+            } 
+            // var what = await fetch( "https://lightlinksio-aehw.Replit.app/api/users/username/Guida" );
+            // var json = await what.json();
+            // console.log( json.npub );
+            // var what = await fetch( "https://lightlinksio-aehw.Replit.app/api/users/pubkey/npub1wwgemuutxuhar8fj8uyfl5wvzj9cka8twey502qlts8mywzvz9ksqepsdd" );
+            // var json = await what.json();
+            // console.log( json.username );
+            // nifty's pubkey: npub1wwgemuutxuhar8fj8uyfl5wvzj9cka8twey502qlts8mywzvz9ksqepsdd
         </script>
         <div class="black-bg hidden" onclick="modalVanish();"></div>
         <div class="modal hidden"></div>
