@@ -270,6 +270,7 @@
             sessionStorage.removeItem( "pubkey" );
             var privkey = sessionStorage.privkey;
             if ( !sessionStorage.privkey ) privkey = params.privkey;
+            var pubkey = super_nostr.getPubkey( privkey );
             if ( privkey ) {
                 var list_of_merchants = [
                     "73919df38b372fd19d323f089fd1cc148b8b74eb764947a81f5c0fb2384c116d",
@@ -289,8 +290,7 @@
                     super_nostr.sendEvent( event, relays[ 0 ] );
                     showModal( 'Success, your affiliations were submitted' );
                 }
-                var addToAffiliations = ( product, event_name, merchant ) => {
-                    var nevent = product.getAttribute( "data-nevent" );
+                var addToAffiliations = ( nevent, event_name, merchant ) => {
                     if ( $$( `[data-nevent="${nevent}"]` ).length > 1 ) return;
                     var div = document.createElement( "div" );
                     div.innerHTML = `
@@ -301,10 +301,14 @@
                 doplus();
                 (async()=>{
                     var info = {}
-                    var events = await super_nostr.getEvents( relays[ 0 ], null, list_of_merchants, [30402] );
+                    var events = await super_nostr.getEvents( relays[ 0 ], null, [ ...list_of_merchants, pubkey ], [30402, 13166] );
                     $( '.edit_page' ).classList.remove( 'hidden' );
                     var j; for ( j=0; j<events.length; j++ ) {
                         var event = events[ j ];
+                        if ( event.kind === 13166 && event.pubkey === pubkey ) {
+                            parse13166( event );
+                            continue;
+                        }
                         var merchant_pubkey = event.pubkey;
                         var npub = pubkeyToNpub( merchant_pubkey );
                         var prejson = await fetch( `https://lightlinksio-aehw.Replit.app/api/users/pubkey/${npub}` );
@@ -314,7 +318,7 @@
                         var nevent = convertPubkeyAndRelaysToNprofile( "nevent", events[ j ].id, relays );
                         var event_name = extractTagFromNostrEvent( event, "title" );
                         var html = `
-                            <div class="product" data-nevent="${nevent}">Product: ${event_name}<br><br>Merchant: ${merchant}<div style="margin-top: 1rem;"><button onclick="addToAffiliations( this.parentElement.parentElement, '${event_name}', '${merchant}' );">Affiliate market this product</div></div>
+                            <div class="product" data-nevent="${nevent}">Product: ${event_name}<br><br>Merchant: ${merchant}<div style="margin-top: 1rem;"><button onclick="addToAffiliations( '${nevent}', '${event_name}', '${merchant}' );">Affiliate market this product</div></div>
                         `;
                         var div = document.createElement( "div" );
                         div.innerHTML = html;
@@ -362,6 +366,18 @@
                     }
                 })();
             }
+            var parse13166 = async event => {
+                console.log( event );
+                var merchant_pubkey = event.pubkey;
+                var npub = pubkeyToNpub( merchant_pubkey );
+                var prejson = await fetch( `https://lightlinksio-aehw.Replit.app/api/users/pubkey/${npub}` );
+                $( '.loading' ).classList.add( 'hidden' );
+                var json = await prejson.json();
+                var nevent = convertPubkeyAndRelaysToNprofile( "nevent", event.id, relays );
+                var event_name = extractTagFromNostrEvent( event, "title" );
+                var merchant = json.username;
+                addToAffiliations( nevent, event_name, merchant );
+            } 
             // var what = await fetch( "https://lightlinksio-aehw.Replit.app/api/users/username/Guida" );
             // var json = await what.json();
             // console.log( json.npub );
