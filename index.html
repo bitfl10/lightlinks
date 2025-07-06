@@ -278,7 +278,88 @@
         }
         .modal * { color: black; }
         .modal input, .modal textarea { max-width: 90%; }
-    </style>
+        
+        /* ADDED: Login form styles */
+            .login-form {
+                max-width: 500px;
+                margin: 2rem auto;
+                padding: 2rem;
+                border: 1px solid #ccc;
+                border-radius: 8px;
+                background: white;
+                color: black;
+            }
+            .login-form input {
+                width: 100%;
+                padding: 10px;
+                margin: 10px 0;
+            }
+            .login-btn {
+                background: #4CAF50;
+                color: white;
+                border: none;
+                padding: 12px 20px;
+                font-size: 1rem;
+                cursor: pointer;
+                width: 100%;
+            }
+            .extension-btn {
+                background: #4285F4;
+                color: white;
+                border: none;
+                padding: 12px 20px;
+                margin-top: 10px;
+                font-size: 1rem;
+                cursor: pointer;
+                width: 100%;
+            }
+        </style>
+
+    <script>
+            /* ADDED: Login functionality */
+            async function handleLogin() {
+                const nsec = document.getElementById('nsecInput').value;
+                if (!nsec) return alert('Please enter your nsec key');
+                
+                try {
+                    // Convert nsec to hex
+                    const words = bech32.bech32.decode(nsec).words;
+                    const privkeyHex = bytesToHex(bech32.bech32.fromWords(words));
+                    
+                    // Store key and reload
+                    sessionStorage.privkey = privkeyHex;
+                    sessionStorage.pubkey = super_nostr.getPubkey(privkeyHex);
+                    window.location.search = ''; // Clear params
+                    window.location.reload();
+                } catch (e) {
+                    alert('Invalid nsec format: ' + e.message);
+                }
+            }
+
+            async function handleExtensionLogin() {
+                if (!window.nostr) return alert('Nostr extension not found');
+                
+                try {
+                    const pubkey = await window.nostr.getPublicKey();
+                    sessionStorage.pubkey = pubkey;
+                    
+                    // Create auth event
+                    const event = {
+                        kind: 22222,
+                        created_at: Math.floor(Date.now()/1000),
+                        tags: [],
+                        content: "LightLinks Admin Authentication"
+                    };
+                    
+                    // Sign with extension
+                    const signedEvent = await window.nostr.signEvent(event);
+                    sessionStorage.signedAuthEvent = JSON.stringify(signedEvent);
+                    window.location.reload();
+                } catch (e) {
+                    alert('Extension error: ' + e.message);
+                }
+            }
+    </script>
     
     <script>
         // MODAL MANAGEMENT
@@ -298,6 +379,23 @@
     </script>
 </head>
 <body>
+
+     <!-- MODIFIED: Login form -->
+        <div class="ensure_login">
+            <div class="login-form">
+                <h3>Merchant Login</h3>
+                <p>Enter your Nostr private key (nsec):</p>
+                <input type="password" id="nsecInput" placeholder="nsec1...">
+                <button class="login-btn" onclick="handleLogin()">Login with Key</button>
+                
+                <div style="margin: 20px 0; text-align: center;">OR</div>
+                
+                <button class="extension-btn" onclick="handleExtensionLogin()">
+                    Login with Nostr Extension
+                </button>
+            </div>
+        </div>
+    
     <!-- HEADER -->
     <h1>Welcome to LightLinks admin</h1>
     
@@ -336,7 +434,25 @@
     <div class="modal hidden"></div>
 
     <script>
-        /**
+            // UPDATED: Authentication check
+            document.addEventListener('DOMContentLoaded', async () => {
+                const privkey = sessionStorage.privkey;
+                const pubkey = sessionStorage.pubkey;
+                const signedEvent = sessionStorage.signedAuthEvent;
+                
+                // Check if logged in
+                if (privkey || pubkey) {
+                    $('.ensure_login').classList.add('hidden');
+                    $('.loading').classList.add('hidden');
+                    $('.options').classList.remove('hidden');
+                    
+                    // Load existing data
+                    await loadEvents();
+                } else {
+                    $('.loading').classList.add('hidden');
+                }
+                
+                /**
          * INITIALIZATION
          */
         
