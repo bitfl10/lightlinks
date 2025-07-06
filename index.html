@@ -1,515 +1,635 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, user-scalable=no">
-        <script src="https://supertestnet.github.io/bankify/super_nostr.js"></script>
-        <script src="https://supertestnet.github.io/nwcjs/nwcjs.js"></script>
-        <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
-        <script src="https://bundle.run/bech32@2.0.0"></script>
-        <script>
-            //nsec1jhd5tlmnelfjv9gqnx0hdr48gsqttyyypky5z78v82ja0wptuvnqpqvzpl
-            var dominus = e => e.target.parentElement.remove();
-            var doplus = init => {
-                if ( $( '.plus_button' ) ) {
-                    $( '.plus_button' ).classList.add( "minus_button" );
-                    $( '.plus_button' ).innerHTML = 'Remove item';
-                    $( '.plus_button' ).onclick = dominus;
-                    $( '.plus_button' ).classList.remove( "plus_button" );
-                if ( init ) $( '.products_option' ).click();
-                }
-                var html = `
-                    <div class="product">
-                        <p>Product title</p>
-                        <input class="product_title">
-                        <p>Price (in sats)</p>
-                        <input class="price">
-                        <p>Location</p>
-                        <input class="location">
-                        <p>Affiliate discount (percentage)</p>
-                        <input class="discount">
-                        <p>Short description</p>
-                        <input class="short_desc">
-                        <p>Long description</p>
-                        <textarea class="long_desc"></textarea>
-                        <p>Categories (comma separated)</p>
-                        <input class="categories">
-                        <p>Image</p>
-                        <input class="product_image">
-                        <button class="plus_button">Add item</button>
-                    </div>
-                `;
-                var div = document.createElement( "div" );
-                div.innerHTML = html;
-                div.getElementsByClassName( "plus_button" )[ 0 ].onclick = doplus;
-                $( '.products' ).append( div.firstElementChild );
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no">
+    <!-- External libraries -->
+    <script src="https://supertestnet.github.io/bankify/super_nostr.js"></script>
+    <script src="https://supertestnet.github.io/nwcjs/nwcjs.js"></script>
+    <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
+    <script src="https://bundle.run/bech32@2.0.0"></script>
+    
+    <script>
+        /**
+         * UTILITY FUNCTIONS
+         */
+        
+        // Remove parent element of clicked item (used for UI components)
+        var dominus = e => e.target.parentElement.remove();
+        
+        // Add new product form fields
+        var doplus = init => {
+            if ($('.plus_button')) {
+                // Convert plus button to remove button
+                $('.plus_button').classList.add("minus_button");
+                $('.plus_button').innerHTML = 'Remove item';
+                $('.plus_button').onclick = dominus;
+                $('.plus_button').classList.remove("plus_button");
+                if (init) $('.products_option').click();
             }
-            var hexToText = hex => {
-                var bytes = new Uint8Array( Math.ceil( hex.length / 2 ) );
-                var i; for ( i=0; i<hex.length; i++ ) bytes[ i ] = parseInt( hex.substr( i * 2, 2 ), 16 );
-                var text = new TextDecoder().decode( bytes );
-                return text;
+            
+            // HTML template for product form
+            var html = `
+                <div class="product">
+                    <p>Product title</p>
+                    <input class="product_title">
+                    <p>Price (in sats)</p>
+                    <input class="price">
+                    <p>Location</p>
+                    <input class="location">
+                    <p>Affiliate discount (percentage)</p>
+                    <input class="discount">
+                    <p>Short description</p>
+                    <input class="short_desc">
+                    <p>Long description</p>
+                    <textarea class="long_desc"></textarea>
+                    <p>Categories (comma separated)</p>
+                    <input class="categories">
+                    <p>Image URL</p>
+                    <input class="product_image">
+                    <button class="plus_button">Add item</button>
+                </div>
+            `;
+            
+            // Create and append product form
+            var div = document.createElement("div");
+            div.innerHTML = html;
+            div.querySelector(".plus_button").onclick = doplus;
+            $('.products').append(div.firstElementChild);
+        }
+        
+        // Add new affiliate form field
+        var affiliatePlus = init => {
+            if ($('.affiliate_plus_button')) {
+                // Convert plus button to remove button
+                $('.affiliate_plus_button').classList.add("affiliate_minus_button");
+                $('.affiliate_plus_button').innerHTML = '-';
+                $('.affiliate_plus_button').onclick = dominus;
+                $('.affiliate_plus_button').classList.remove("affiliate_plus_button");
             }
-            var textToHex = text => {
-                var encoded = new TextEncoder().encode( text );
-                return Array.from( encoded )
-                    .map( x => x.toString( 16 ).padStart( 2, "0" ) )
-                    .join( "" );
+            
+            // HTML template for affiliate form
+            var html = `
+                <div class="affiliate">
+                    <p>Affiliate npub or nprofile</p>
+                    <input class="affiliate_nprofile">
+                    <span class="affiliate_plus_button">+</span>
+                </div>
+            `;
+            
+            // Create and append affiliate form
+            var div = document.createElement("div");
+            div.innerHTML = html;
+            div.querySelector(".affiliate_plus_button").onclick = affiliatePlus;
+            $('.affiliates').append(div.firstElementChild);
+        }
+        
+        /**
+         * DATA CONVERSION FUNCTIONS
+         */
+        
+        // Convert hex to text
+        var hexToText = hex => {
+            var bytes = new Uint8Array(Math.ceil(hex.length / 2));
+            for (var i = 0; i < bytes.length; i++) 
+                bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+            return new TextDecoder().decode(bytes);
+        }
+        
+        // Convert text to hex
+        var textToHex = text => {
+            var encoded = new TextEncoder().encode(text);
+            return Array.from(encoded)
+                .map(x => x.toString(16).padStart(2, "0"))
+                .join("");
+        }
+        
+        // Convert hex to byte array
+        var hexToBytes = hex => 
+            Uint8Array.from(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+        
+        // Convert byte array to hex
+        var bytesToHex = bytes => 
+            bytes.reduce((str, byte) => str + byte.toString(16).padStart(2, "0"), "");
+        
+        /**
+         * NOSTR HELPER FUNCTIONS
+         */
+        
+        // Extract value from event tags
+        var extractTagFromNostrEvent = (event, tag) => {
+            for (var item of event.tags) {
+                if (item[0] === tag) return item[1];
             }
-            var hexToBytes = hex => Uint8Array.from( hex.match( /.{1,2}/g ).map( byte => parseInt( byte, 16 ) ) );
-            var bytesToHex = bytes => bytes.reduce( ( str, byte ) => str + byte.toString( 16 ).padStart( 2, "0" ), "" );
-            var extractTagFromNostrEvent = ( event, tag ) => {
-                var data = null;
-                event.tags.every( item => {
-                    if ( item[ 0 ] === tag ) {
-                        data = item[ 1 ];
-                        return;
-                    }
-                    return true;
-                });
-                if ( data ) return data;
-                return "no data";
+            return "no data";
+        }
+        
+        // Extract hashtags from event tags
+        var extractHashtagsFromNostrEvent = event => {
+            return event.tags
+                .filter(item => item[0] === "t")
+                .map(item => item[1]);
+        }
+        
+        // Promise-based delay
+        var waitSomeTime = num => new Promise(resolve => setTimeout(resolve, num));
+        
+        // Decode nevent to [event_id, relays]
+        var convertNEvent = nevent => {
+            var decoded = bech32.bech32.decode(nevent, 100_000);
+            var arr = bech32.bech32.fromWords(decoded.words);
+            var hex = bytesToHex(arr);
+            
+            // Extract event ID
+            var event_id = hex.startsWith("0020") ? 
+                hex.substring(4, 68) : 
+                hex.substring(hex.length - 64);
+            
+            // Extract relays
+            var relays = [];
+            var remainingHex = hex.startsWith("0020") ? 
+                hex.substring(68) : 
+                hex.substring(0, hex.length - 64);
+            
+            // Parse relay information
+            while (remainingHex.startsWith("01")) {
+                var relay_length = parseInt(remainingHex.substring(2, 4), 16);
+                var relay_hex = remainingHex.substring(4, 4 + relay_length * 2);
+                relays.push(hexToText(relay_hex));
+                remainingHex = remainingHex.substring(4 + relay_length * 2);
             }
-            var extractHashtagsFromNostrEvent = event => {
-                var hashtags = [];
-                event.tags.forEach( item => {
-                    if ( item[ 0 ] === "t" ) hashtags.push( item[ 1 ] );
-                });
-                if ( hashtags ) return hashtags;
-                return "no hashtags";
-            }
-            var waitSomeTime = num => new Promise( resolve => setTimeout( resolve, num ) );
-            var affiliatePlus = init => {
-                if ( $( '.affiliate_plus_button' ) ) {
-                    $( '.affiliate_plus_button' ).classList.add( "affiliate_minus_button" );
-                    $( '.affiliate_plus_button' ).innerHTML = '-';
-                    $( '.affiliate_plus_button' ).onclick = dominus;
-                    $( '.affiliate_plus_button' ).classList.remove( "affiliate_plus_button" );
-                    // if ( init ) $( '.affiliates_option' ).click();
-                }
-                var html = `
-                    <div class="affiliate">
-                        <p>Affiliate npub</p>
-                        <input class="affiliate_nprofile">
-                        <span class="affiliate_plus_button">+</span>
-                    </div>
-                `;
-                var div = document.createElement( "div" );
-                div.innerHTML = html;
-                div.getElementsByClassName( "affiliate_plus_button" )[ 0 ].onclick = affiliatePlus;
-                $( '.affiliates' ).append( div.firstElementChild );
-            }
-            var convertNEvent = nevent => {
-                var arr = bech32.bech32.fromWords( bech32.bech32.decode( nevent, 100_000 ).words );
-                var hex = bytesToHex( arr );
-                if ( !hex.startsWith( "0020" ) ) var event_id = hex.substring( hex.length - 64 );
-                else var event_id = hex.substring( 4, 68 );
-                if ( !hex.startsWith( "0020" ) ) hex = hex.substring( 0, hex.length - 64 );
-                else hex = hex.substring( 68 );
-                var relays = [];
-                var loop = () => {
-                    if ( hex.startsWith( "01" ) ) {
-                        var relay_length = parseInt( hex.substring( 2, 4 ), 16 );
-                        relays.push( hexToText( hex.substring( 4, 4 + relay_length * 2 ) ) );
-                        hex = hex.substring( 4 + relay_length * 2 );
-                        loop();
-                    }
-                }
-                loop();
-                return [ event_id, relays ];
-            }
-            var convertPubkeyAndRelaysToNprofile = ( prefix, pubkey, relays ) => {
-                var relays_str = "";
-                relays.forEach( relay => {
-                    var relay_str = textToHex( relay );
-                    var len = ( relay_str.length / 2 ).toString( 16 );
-                    if ( len.length % 2 ) len = "0" + len;
-                    relays_str = relays_str + "01" + len + relay_str;
-                });
-                var hex = relays_str + "0020" + pubkey;
-                var bytes = hexToBytes( hex );
-                var nevent = bech32.bech32.encode( prefix, bech32.bech32.toWords( bytes ), 100_000 );
-                return nevent;
-            }
-            var pubkeyToNpub = hex => bech32.bech32.encode( "npub", bech32.bech32.toWords( hexToBytes( hex ) ) );
-            var pubkeyFromNpub = npub => super_nostr.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( npub, 10_000 ).words ) );
-        </script>
-        <style>
-            * {
-                box-sizing: border-box;
-                font-size: 1.15rem;
-                font-family: Arial, sans-serif;
-            }
-            html {
-                max-width: 800px;
-                padding: 3rem 1rem;
-                margin: auto;
-                line-height: 1.25;
-                padding: 0;
-            }
-            body {
-                margin: 3rem 1rem;
-                word-wrap: break-word;
-            }
-            h1 {
-                font-size: 2rem;
-            }
-            h2 {
-                font-size: 1.5rem;
-            }
-            input, textarea {
-                line-height: 1.25;
-                width: 100%;
-                height: 1.8rem;
-                font-size: 1.15rem;
-                border: 1px solid grey;
-            }
-            textarea {
-                height: auto;
-            }
-            .hidden {
-                display: none !important;
-            }
-            .option {
-                margin-bottom: 1rem;
-                padding: 1rem;
-                border: 1px solid black;
-                border-radius: 1rem;
-                background-color: #cccccc;
-                color: white;
-                font-weight: bold;
-                cursor: pointer;
-            }
-            .affiliates {
-                background-color: white;
-                color: black;
-                padding: 1rem;
-                border: 1px solid black;
-                border-radius: 1rem;
-                margin-top: 1rem;
-                cursor: auto;
-            }
-            .product {
-                padding: 1rem;
-                border: 1px solid black;
-                border-radius: 1rem;
-                margin-top: 1rem;
-                background-color: white;
-                color: black;
-                cursor: auto;
-            }
-            .affiliate:first-child {
-                margin-top: -.5rem;
-            }
-            .submit_div button {
-                margin-top: 1rem;
-                width: 100%;
-            }
-            @media screen and (max-width: 600px) {
-            }
-        </style>
-        <style>
-            .plus_button, .minus_button {
-                margin-top: 1.5rem;
-                width: 100%;
-            }
-            .affiliate_nprofile {
-                width: calc( 100% - 2.5rem );
-            }
-            .affiliate_plus_button, .affiliate_minus_button {
-                display: inline-block;
-                border: 1px solid grey;
-                padding: 0px 5px;
-                cursor: pointer;
-                width: 2rem;
-                text-align: center;
-                vertical-align: top;
-                height: 1.8rem;
-                line-height: 1.8rem;
-            }
+            
+            return [event_id, relays];
+        }
+        
+        // Convert hex pubkey to npub
+        var pubkeyToNpub = hex => 
+            bech32.bech32.encode("npub", bech32.bech32.toWords(hexToBytes(hex)));
+        
+        // Extract hex pubkey from npub
+        var pubkeyFromNpub = npub => 
+            bytesToHex(bech32.bech32.fromWords(
+                bech32.bech32.decode(npub, 10_000).words
+            ));
+    </script>
+    
+    <style>
+        /* GLOBAL STYLES */
+        * {
+            box-sizing: border-box;
+            font-size: 1.15rem;
+            font-family: Arial, sans-serif;
+        }
+        html {
+            max-width: 800px;
+            padding: 3rem 1rem;
+            margin: auto;
+            line-height: 1.25;
+            padding: 0;
+        }
+        body {
+            margin: 3rem 1rem;
+            word-wrap: break-word;
+        }
+        h1 { font-size: 2rem; }
+        h2 { font-size: 1.5rem; }
+        input, textarea {
+            line-height: 1.25;
+            width: 100%;
+            height: 1.8rem;
+            font-size: 1.15rem;
+            border: 1px solid grey;
+        }
+        textarea { height: auto; }
+        .hidden { display: none !important; }
+        
+        /* OPTION CONTAINERS */
+        .option {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            border: 1px solid black;
+            border-radius: 1rem;
+            background-color: #cccccc;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        /* FORM SECTIONS */
+        .affiliates, .product {
+            background-color: white;
+            color: black;
+            padding: 1rem;
+            border: 1px solid black;
+            border-radius: 1rem;
+            margin-top: 1rem;
+        }
+        .affiliate:first-child { margin-top: -.5rem; }
+        
+        /* BUTTON STYLES */
+        .plus_button, .minus_button {
+            margin-top: 1.5rem;
+            width: 100%;
+        }
+        .affiliate_nprofile {
+            width: calc(100% - 2.5rem);
+        }
+        .affiliate_plus_button, .affiliate_minus_button {
+            display: inline-block;
+            border: 1px solid grey;
+            padding: 0px 5px;
+            cursor: pointer;
+            width: 2rem;
+            text-align: center;
+            vertical-align: top;
+            height: 1.8rem;
+            line-height: 1.8rem;
+        }
+        .submit_div button {
+            margin-top: 1rem;
+            width: 100%;
+        }
+        
+        /* MODAL STYLES */
+        .black-bg {
+            width: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: black;
+            opacity: .5;
+            width: 100vw;
+            height: 100vh;
+        }
+        .modal {
+            position: fixed;
+            box-sizing: border-box;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 560px;
+            background-color: white;
+            border-radius: 1rem;
+            padding: 20px;
+            color: black;
+            text-align: center;
+            word-wrap: break-word;
+        }
+        .modal * { color: black; }
+        .modal input, .modal textarea { max-width: 90%; }
+    </style>
+    
+    <script>
+        // MODAL MANAGEMENT
+        var modalVanish = () => {
+            $(".black-bg").classList.add("hidden");
+            $(".modal").classList.add("hidden");
+        }
+        
+        var showModal = content => {
+            $(".modal").innerHTML = `
+                <div class="x_modal" style="position: absolute;right: 1rem;top: 0.5rem;font-size: 2rem; cursor: pointer; color: black;" onclick="modalVanish()">&times;</div>
+                <div style="overflow-y: auto; max-height: 80vh; margin-top: 1.5rem;">${content}</div>
+            `;
+            $(".black-bg").classList.remove("hidden");
+            $(".modal").classList.remove("hidden");
+        }
+    </script>
+</head>
+<body>
+    <!-- HEADER -->
+    <h1>Welcome to LightLinks admin</h1>
+    
+    <!-- LOADING INDICATOR -->
+    <div class="loading">loading...</div>
+    
+    <!-- LOGIN PROMPT -->
+    <div class="ensure_login">
+        You need to be logged in. Go to lightlinks.io
+    </div>
+    
+    <!-- LIGHTNING ADDRESS FORM -->
+    <div class="lud16_entry_form hidden">
+        <p>Enter a Lightning address for payments:</p>
+        <p><input class="lud16_form"></p>
+        <p><button class="submit_lud16_form" onclick="submitLud16();">Submit</button></p>
+    </div>
+    
+    <!-- MAIN INTERFACE -->
+    <div class="options hidden">
+        <div class="option products_option">
+            <div class="label">Products</div>
+            <div class="sometimes_invisible products hidden"></div>
+            <div class="submit_div hidden"><button onclick="submitProducts();">Submit</button></div>
+        </div>
+        
+        <div class="option affiliates_option">
+            <div class="label">Affiliates</div>
+            <div class="sometimes_invisible affiliates hidden"></div>
+            <div class="submit_div hidden"><button onclick="submitAffiliates();">Submit</button></div>
+        </div>
+    </div>
+    
+    <!-- MODAL CONTAINERS -->
+    <div class="black-bg hidden" onclick="modalVanish();"></div>
+    <div class="modal hidden"></div>
 
-        </style>
-        <style>
-            .black-bg {
-                width: 100%;
-                position: fixed;
-                top: 0;
-                left: 0;
-                background-color: black;
-                opacity: .5;
-                width: 100vw;
-                height: 100vh;
-            }
-            .modal {
-                position: fixed;
-                box-sizing: border-box;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%,-50%);
-                width: 90%;
-                max-width: 560px;
-                background-color: white;
-                border-radius: 1rem;
-                padding: 20px;
-                color: black;
-                text-align: center;
-                word-wrap: break-word;
-            }
-            .modal * {
-                color: black;
-            }
-            .modal input, .modal textarea {
-                max-width: 90%;
-            }
-            .hidden {
-                display: none !important;
-            }
-        </style>
-        <script>
-            var modalVanish = () => {
-                $( ".black-bg" ).classList.add( "hidden" );
-                $( ".modal" ).classList.add( "hidden" );
-            }
-            var showModal = content => {
-                $( ".modal" ).innerHTML = `<div class="x_modal" style="position: absolute;right: 1rem;top: 0.5rem;font-size: 2rem; cursor: pointer; color: black;" onclick="modalVanish()">&times;</div>`;
-                $( ".modal" ).innerHTML += `<div style="overflow-y: auto; max-height: 80vh; margin-top: 1.5rem;">${content}</div>`;
-                $( ".black-bg" ).classList.remove( "hidden" );
-                $( ".modal" ).classList.remove( "hidden" );
-            }
-        </script>
-        <script>
-            var $ = document.querySelector.bind( document );
-            var $$ = document.querySelectorAll.bind( document );
-            var url_params = new URLSearchParams( window.location.search );
-            var url_keys = url_params.keys();
-            var $_GET = {}
-            for ( var key of url_keys ) $_GET[ key ] = url_params.get( key );
-            var hash_arr = window.location.href.substring( window.location.href.indexOf( "#" ) ).split( "#" );
-            hash_arr.splice( 0, 1 );
-            var params = {}
-            hash_arr.forEach( item => {
-                var vals = item.split( "=" );
-                params[ vals[ 0 ] ] = vals[ 1 ];
-            });
-            if ( sessionStorage.privkey ) {
-                window.onload = () => {
-                    $( '.ensure_login' ).classList.add( "hidden" );
-                //     $( '.loading' ).classList.remove( "hidden" );
-                }
-            }
-            if ( params.privkey ) {
-                window.onload = () => {
-                    $( '.ensure_login' ).classList.add( "hidden" );
-                //     $( '.options' ).classList.remove( "hidden" );
-                }
-                var privkey = super_nostr.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( params.privkey ).words ) );
-                //TODO: uncomment the line below
-                window.location.href = window.location.href.substring( 0, window.location.href.indexOf( "#" ) );
+    <script>
+        /**
+         * INITIALIZATION
+         */
+        
+        // DOM shortcuts
+        var $ = document.querySelector.bind(document);
+        var $$ = document.querySelectorAll.bind(document);
+        
+        // Parse URL parameters
+        var url_params = new URLSearchParams(window.location.search);
+        var $_GET = {};
+        for (var key of url_params.keys()) $_GET[key] = url_params.get(key);
+        
+        // Parse hash parameters
+        var hash_arr = window.location.hash.substring(1).split("#");
+        var params = {};
+        hash_arr.forEach(item => {
+            var [key, value] = item.split("=");
+            if (key && value) params[key] = value;
+        });
+        
+        // Process private key from URL
+        if (params.privkey) {
+            try {
+                // Decode bech32 private key
+                var words = bech32.bech32.decode(params.privkey).words;
+                var privkey = bytesToHex(bech32.bech32.fromWords(words));
+                
+                // Clean URL
+                window.location.href = window.location.href.split("#")[0];
+                
+                // Store keys
                 params.privkey = privkey;
-                var pubkey = super_nostr.getPubkey( privkey );
                 sessionStorage.privkey = privkey;
-                sessionStorage.pubkey = pubkey;
+                sessionStorage.pubkey = super_nostr.getPubkey(privkey);
+                
+                // Update UI
+                $('.ensure_login').classList.add("hidden");
+            } catch (e) {
+                console.error("Error processing private key:", e);
             }
-            var loadEvents = async () => {
+        }
+        
+        // Set up UI interactions
+        $$('.option').forEach(item => item.onclick = e => {
+            // Find target container
+            let target = e.target;
+            while (target && !target.classList.contains("option")) {
+                target = target.parentElement;
+            }
+            if (!target) return;
+            
+            // Toggle visibility
+            const container = target.querySelector(".sometimes_invisible");
+            const submitDiv = target.querySelector(".submit_div");
+            
+            if (container.classList.contains("hidden")) {
+                container.classList.remove("hidden");
+                submitDiv.classList.remove("hidden");
+            } else {
+                container.classList.add("hidden");
+                submitDiv.classList.add("hidden");
+            }
+        });
+        
+        /**
+         * LOAD EXISTING DATA
+         */
+        var loadEvents = async () => {
+            try {
                 var privkey = sessionStorage.privkey;
                 var pubkey = sessionStorage.pubkey;
-                events = await super_nostr.getEvents('wss://relay.damus.io', null, [ pubkey ], [30402, 13167]);
+                
+                // Load merchant's existing products
+                var events = await super_nostr.getEvents(
+                    'wss://relay.damus.io', 
+                    null, 
+                    [pubkey], 
+                    [30402, 13167]
+                );
                 events.reverse();
-                var i; for ( i=0; i<events.length; i++ ) {
-                    var event = events[ i ];
-                    if ( event.kind === 13167 ) {
-                        parse13167( event );
+                
+                // Process each event
+                for (var event of events) {
+                    if (event.kind === 13167) {
+                        parse13167(event);
                         continue;
                     }
+                    
+                    // Parse product details
                     var parsedEvent = {
-                        title: extractTagFromNostrEvent( event, "title" ),
-                        price: extractTagFromNostrEvent( event, "price" ),
-                        location: extractTagFromNostrEvent( event, "location" ),
-                        discount: extractTagFromNostrEvent( event, "discount" ),
-                        short_desc: extractTagFromNostrEvent( event, "summary" ),
+                        title: extractTagFromNostrEvent(event, "title"),
+                        price: extractTagFromNostrEvent(event, "price"),
+                        location: extractTagFromNostrEvent(event, "location"),
+                        discount: extractTagFromNostrEvent(event, "discount"),
+                        short_desc: extractTagFromNostrEvent(event, "summary"),
                         long_desc: event.content,
-                        categories: extractHashtagsFromNostrEvent( event ),
-                        product_image: extractTagFromNostrEvent( event, "image" ),
-                    }
-                    var product = $$( '.product' )[ $$( '.product' ).length - 1 ];
-                    product.getElementsByClassName( "product_title" )[ 0 ].value = parsedEvent.title;
-                    product.getElementsByClassName( "price" )[ 0 ].value = parsedEvent.price;
-                    product.getElementsByClassName( "location" )[ 0 ].value = parsedEvent.location;
-                    product.getElementsByClassName( "discount" )[ 0 ].value = parsedEvent.discount;
-                    product.getElementsByClassName( "short_desc" )[ 0 ].value = parsedEvent.short_desc;
-                    product.getElementsByClassName( "long_desc" )[ 0 ].value = parsedEvent.long_desc;
-                    product.getElementsByClassName( "categories" )[ 0 ].value = parsedEvent.categories.join( ", " );
-                    product.getElementsByClassName( "product_image" )[ 0 ].value = parsedEvent.product_image;
-                    $( '.plus_button' ).click();
-                    await waitSomeTime( 100 );
+                        categories: extractHashtagsFromNostrEvent(event),
+                        product_image: extractTagFromNostrEvent(event, "image"),
+                    };
+                    
+                    // Create form and fill data
+                    doplus();
+                    var product = $$('.product').slice(-1)[0];
+                    product.querySelector(".product_title").value = parsedEvent.title;
+                    product.querySelector(".price").value = parsedEvent.price;
+                    product.querySelector(".location").value = parsedEvent.location;
+                    product.querySelector(".discount").value = parsedEvent.discount;
+                    product.querySelector(".short_desc").value = parsedEvent.short_desc;
+                    product.querySelector(".long_desc").value = parsedEvent.long_desc;
+                    product.querySelector(".categories").value = parsedEvent.categories.join(", ");
+                    product.querySelector(".product_image").value = parsedEvent.product_image;
+                    
+                    await waitSomeTime(100);
                 }
-                await waitSomeTime( 1000 );
+                
+                // Clean up session
                 params.privkey = sessionStorage.privkey;
-                sessionStorage.removeItem( "privkey" );
-                sessionStorage.removeItem( "pubkey" );
+                sessionStorage.removeItem("privkey");
+                sessionStorage.removeItem("pubkey");
+            } catch (e) {
+                console.error("Error loading events:", e);
             }
-            var parse13167 = async event => {
-                event.tags.reverse();
-                var i; for ( i=0; i<event.tags.length; i++ ) {
-                    var tag = event.tags[ i ];
-                    var npub_form = $$( '.affiliate_nprofile' )[ $$( '.affiliate_nprofile' ).length - 1 ];
-                    if ( !tag[ 1 ] ) continue;
-                    npub_form.value = tag[ 1 ];
-                    $( '.affiliate_plus_button' ).click();
-                    await waitSomeTime( 100 );
+        };
+        
+        /**
+         * PARSE AFFILIATION EVENT (kind 13167)
+         * Loads saved affiliate profiles
+         */
+        var parse13167 = async event => {
+            try {
+                // Process tags in reverse order (to match form order)
+                for (var tag of [...event.tags].reverse()) {
+                    // Skip invalid tags
+                    if (!tag[1]) continue;
+                    
+                    // Create form and fill data
+                    affiliatePlus();
+                    var npubForm = $$('.affiliate_nprofile').slice(-1)[0];
+                    npubForm.value = tag[1];
+                    await waitSomeTime(100);
                 }
+            } catch (e) {
+                console.error("Error parsing affiliate event:", e);
             }
-            loadEvents();
-        </script>
-    </head>
-    <body>
-        <h1>Welcome to lightlinks admin</h1>
-        <div class="loading">loading...</div>
-        <div class="ensure_login">
-            You need to be logged in. Go to lightlinks.io
-        </div>
-        <div class="lud16_entry_form hidden">
-            <p>Enter a lightning address where your users can send money when they buy your products</p>
-            <p><input class="lud16_form"></p>
-            <p><button class="submit_lud16_form" onclick="submitLud16();">Submit</button></form>
-        </div>
-        <div class="options hidden">
-            <p>Please create a product</p>
-            <div class="option products_option">
-                <div class="label">Products</div>
-                <div class="sometimes_invisible products hidden"></div>
-                <div class="submit_div hidden"><button onclick="submitProducts();">Submit</button></div>
-            </div>
-            <div class="option affiliates_option">
-                <div class="label">Affiliates</div>
-                <div class="sometimes_invisible affiliates hidden"></div>
-                <div class="submit_div hidden"><button onclick="submitAffiliates();">Submit</button></div>
-            </div>
-        </div>
-        <script>
-            var events = null;
-            var relays = [ "wss://relay.damus.io" ];
-            $$( '.option' ).forEach( item => item.onclick = e => {
-                var findParent = ( node, num_of_ups = 0 ) => {
-                    if ( !node.parentElement ) return;
-                    if ( node.parentElement.classList.contains( "sometimes_invisible" ) ) return;
-                    if ( node.parentElement.classList.contains( "option" ) ) return num_of_ups;
-                    num_of_ups = num_of_ups + 1;
-                    return findParent( node.parentElement, num_of_ups );
-                }
-                var num_of_ups = findParent( e.target );
-                var target = e.target;
-                var i; for ( i=0; i<num_of_ups + 1; i++ ) {
-                    target = target[ "parentElement" ];
-                }
-                var target = target.getElementsByClassName( "sometimes_invisible" )[ 0 ];
-                if ( !target ) return;
-                if ( target.classList.contains( "hidden" ) ) {
-                    target.classList.remove( "hidden" );
-                    target.parentElement.getElementsByClassName( "submit_div" )[ 0 ].classList.remove( "hidden" );
-                } else {
-                    target.classList.add( "hidden" );
-                    target.parentElement.getElementsByClassName( "submit_div" )[ 0 ].classList.add( "hidden" );
-                }
-            });
-            var submitProducts = async () => {
+        };
+        
+        /**
+         * SUBMIT PRODUCTS
+         * Creates kind 30402 events for each product
+         */
+        var submitProducts = async () => {
+            try {
                 var privkey = params.privkey;
-                var products = [];
-                $$( '.product' ).forEach( item => {
-                    products.push({
-                        title: item.getElementsByClassName( "product_title" )[ 0 ].value,
-                        price: Number( item.getElementsByClassName( "price" )[ 0 ].value ),
-                        location: item.getElementsByClassName( "location" )[ 0 ].value,
-                        discount: Number( item.getElementsByClassName( "discount" )[ 0 ].value ),
-                        short_desc: item.getElementsByClassName( "short_desc" )[ 0 ].value,
-                        long_desc: item.getElementsByClassName( "long_desc" )[ 0 ].value,
-                        categories: item.getElementsByClassName( "categories" )[ 0 ].value.split( "," ),
-                        product_image: item.getElementsByClassName( "product_image" )[ 0 ].value,
-                    });
-                });
-                products.forEach( ( item, index ) => {
-                    item.categories.forEach( ( cat, idx ) => {
-                        if ( cat.startsWith( " " ) ) products[ index ].categories[ idx ] = cat.substring( 1 );
-                    });
-                });
-                console.log( products );
-                products.forEach( async product => {
-                    var msg = product.long_desc;
+                
+                // Collect all products
+                var products = Array.from($$('.product')).map(item => ({
+                    title: item.querySelector(".product_title").value,
+                    price: Number(item.querySelector(".price").value),
+                    location: item.querySelector(".location").value,
+                    discount: Number(item.querySelector(".discount").value),
+                    short_desc: item.querySelector(".short_desc").value,
+                    long_desc: item.querySelector(".long_desc").value,
+                    categories: item.querySelector(".categories").value
+                        .split(",")
+                        .map(cat => cat.trim())
+                        .filter(cat => cat),
+                    product_image: item.querySelector(".product_image").value,
+                }));
+                
+                // Create events for each product
+                for (var product of products) {
+                    // Prepare tags
                     var tags = [
-                        [ "title", product.title ],
-                        [ "published_at", String( Math.floor( Date.now() / 1000 ) ) ],
-                        [ "image", product.product_image ],
-                        [ "summary", product.short_desc ],
-                        [ "location", product.location ],
-                        [ "price", `${product.price}`, "sats", "never", "active" ],
-                        [ "discount", `${product.discount}`, "percent" ],
+                        ["title", product.title],
+                        ["published_at", String(Math.floor(Date.now() / 1000))],
+                        ["image", product.product_image],
+                        ["summary", product.short_desc],
+                        ["location", product.location],
+                        ["price", `${product.price}`, "sats", "never", "active"],
+                        ["discount", `${product.discount}`, "percent"],
                     ];
-                    product.categories.forEach( cat => tags.push( [ "t", cat ] ) );
-                    var event = await super_nostr.prepEvent( privkey, msg, 30402, tags );
-                    super_nostr.sendEvent( event, relays[ 0 ] );
-                    console.log( event );
-                });
-            }
-            var submitAffiliates = async () => {
-                var privkey = params.privkey;
-                //list of nprofiles:
-                //nprofile1qqszrqlfgavys8g0zf8mmy79dn92ghn723wwawx49py0nqjn7jtmjagppamhxue69uhkummnw3ezumt0d5qs6amnwvaz7tmwdaejumr0dssraqwh
-                //nprofile1qqsv6sy2d8xxcumu5xnkalpl5frudjjnajq87mnuj46pvsty09lgzcspz3mhxue69uhhyetvv9ujuerpd46hxtnfduqs6amnwvaz7tmwdaejumr0dsqkvamnwvaz7tmxd9k8getj9ehx7um5wgh8w6twv5hkuur4vgck2dr3vu6nvamkvsek26r9vajrserdxaexcem28p3k6wfe8pkhjufsv95rsefews6h5et3ddnnwaphwvunxufhx5c8qdek8a38ymmpv33kzum58468yat9qyt8wumn8ghj7un9d3shjtnwdaehgu3wvfskueqpp4mhxue69uhhjctzw5hx6egpypmhxue69uhhyetvv9uj66ns9ehx7um5wgh8w6tjv4jxuet59e48q904jph
-                var nprofiles = [];
-                $$( '.affiliate_nprofile' ).forEach( item => nprofiles.push( [ "affiliate", item.value ] ) );
-                var event = {
-                    "kind": 13167,
-                    "created_at": Math.floor( Date.now() / 1000 ),
-                    "content": "",
-                    "tags": nprofiles,
+                    
+                    // Add category tags
+                    product.categories.forEach(cat => tags.push(["t", cat]));
+                    
+                    // Create and send event
+                    var event = await super_nostr.prepEvent(
+                        privkey, 
+                        product.long_desc, 
+                        30402,  // Product listing kind
+                        tags
+                    );
+                    
+                    super_nostr.sendEvent(event, "wss://relay.damus.io");
+                    console.log("Product submitted:", event);
                 }
-                var event = await super_nostr.prepEvent( privkey, "", 13167, nprofiles );
-                super_nostr.sendEvent( event, relays[ 0 ] );
-                console.log( event );
+                
+                showModal('Products submitted successfully!');
+            } catch (e) {
+                console.error("Error submitting products:", e);
+                showModal('Error: ' + e.message);
             }
-            var submitLud16 = async () => {
-                var lnaddy = $( '.lud16_form' ).value;
-                var msg = JSON.stringify({"lud16":`${lnaddy}`});
+        };
+        
+        /**
+         * SUBMIT AFFILIATES
+         * Creates kind 13167 event with affiliate profiles
+         */
+        var submitAffiliates = async () => {
+            try {
                 var privkey = params.privkey;
-                if ( !privkey ) privkey = sessionStorage.privkey;
-                var event = await super_nostr.prepEvent( privkey, msg, 0, [] );
-                console.log( 'sent!' );
-                console.log( event );
-                super_nostr.sendEvent( event, relays[ 0 ] );
-                showModal( 'success! Refresh your page' );
+                
+                // Collect all affiliate profiles
+                var nprofiles = Array.from($$('.affiliate_nprofile')).map(item => 
+                    ["affiliate", item.value]
+                );
+                
+                // Create and send event
+                var event = await super_nostr.prepEvent(
+                    privkey, 
+                    "", 
+                    13167,  // Affiliate list kind
+                    nprofiles
+                );
+                
+                super_nostr.sendEvent(event, "wss://relay.damus.io");
+                console.log("Affiliates submitted:", event);
+                showModal('Affiliate list updated!');
+            } catch (e) {
+                console.error("Error submitting affiliates:", e);
+                showModal('Error: ' + e.message);
             }
-            var getZapReceipt = async checking_id => {
-                var events = await nwcjs.getEvents( relays[ 0 ], null, [ 9735 ], null, null, 1, [ checking_id ], null, 3 );
-                if ( !events.length ) return;
-                return events[ 0 ];
+        };
+        
+        /**
+         * SUBMIT LIGHTNING ADDRESS
+         * Creates kind 0 event with payment information
+         */
+        var submitLud16 = async () => {
+            try {
+                var lnaddy = $('.lud16_form').value;
+                var privkey = params.privkey || sessionStorage.privkey;
+                
+                // Create metadata event
+                var content = JSON.stringify({ lud16: lnaddy });
+                var event = await super_nostr.prepEvent(privkey, content, 0, []);
+                
+                // Send to relay
+                super_nostr.sendEvent(event, "wss://relay.damus.io");
+                console.log("Lightning address submitted:", event);
+                showModal('Success! Please refresh your page');
+            } catch (e) {
+                console.error("Error submitting Lightning address:", e);
+                showModal('Error: ' + e.message);
             }
-            (async()=>{
-                doplus( "init" );
-                affiliatePlus( "init" );
-                $( '.lud16_form' ).value = '';
-                var pubkey = sessionStorage.pubkey;
-                if ( params.pubkey ) pubkey = params.pubkey;
-                if ( !pubkey ) return;
-                //TODO: remove this pubkey
-                var pubkey = `2183e94758481d0f124fbd93c56ccaa45e7e545ceeb8d52848f98253f497b975`;
-                var events = await super_nostr.getEvents( relays[ 0 ], null, [ pubkey ], [ 0 ], null, null, 1 );
-                if ( !events.length ) {
-                    $( '.lud16_entry_form' ).classList.remove( "hidden" );
-                    $( '.options' ).classList.add( "hidden" );
-                    $( '.loading' ).classList.add( "hidden" );
-                    return;
-                } else {
-                    $( '.options' ).classList.remove( "hidden" );
-                    $( '.loading' ).classList.add( "hidden" );
-                }
-                var lnaddy = JSON.parse( events[ 0 ].content ).lud16;
-                var [ invoice, checking_id ] = await nwcjs.getZapRequest( lnaddy, 1000, relays );
-                console.log( invoice, checking_id );
-                var receipt = await getZapReceipt( checking_id );
-                console.log( receipt );
-            })();
-        </script>
-        <div class="black-bg hidden" onclick="modalVanish();"></div>
-        <div class="modal hidden"></div>
-    </body>
+        };
+        
+        /**
+         * INITIALIZATION SCRIPT
+         */
+        (async () => {
+            // Create initial forms
+            doplus(true);
+            affiliatePlus(true);
+            
+            // Check user status
+            var pubkey = sessionStorage.pubkey || params.pubkey;
+            if (!pubkey) return;
+            
+            // Check for existing Lightning address
+            var events = await super_nostr.getEvents(
+                "wss://relay.damus.io", 
+                null, 
+                [pubkey], 
+                [0], 
+                null, 
+                null, 
+                1
+            );
+            
+            if (events.length === 0) {
+                // Show Lightning address form
+                $('.lud16_entry_form').classList.remove("hidden");
+                $('.options').classList.add("hidden");
+            } else {
+                // Show main interface
+                $('.options').classList.remove("hidden");
+            }
+            
+            // Load existing data
+            await loadEvents();
+            $('.loading').classList.add("hidden");
+        })();
+    </script>
+</body>
 </html>
